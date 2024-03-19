@@ -1,0 +1,12 @@
+cc_library(
+	name = "easynet",
+	includes = ["include"],
+	hdrs = glob(["include/*.h"]),
+	visibility = ["//visibility:public"]
+)
+
+cc_binary(
+	name = "server",
+	srcs = ["src/server.c"],
+	deps = [":easynet"]
+)
