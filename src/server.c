@@ -2,6 +2,8 @@
 #include "easylog.h"
 
 int main(int argc, char* argv[]) {
+	ezn_init();
+
 	char name[MAX_HOST_NAME_LENGTH];
 	char addr[MAX_IP_ADDR_LENGTH];
 
@@ -19,5 +21,6 @@ int main(int argc, char* argv[]) {
 		EZN_FATAL("Host IP could not be detected, internal error found");
 	}
 
+	ezn_clean();
 	return 0;
 }
