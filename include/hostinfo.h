@@ -3,6 +3,7 @@
 #include "easylog.h"
 #include <string.h>
 
+
 #define MAX_HOST_NAME_LENGTH 253
 
 EZN_STATUS ezn_hostname(char* name, const size_t bufferlength);
@@ -21,12 +22,9 @@ EZN_STATUS ezn_hostaddress(char* address, const size_t bufferlength) {
 	}
 	char hostname[MAX_HOST_NAME_LENGTH];
 	if (ezn_hostname(hostname, MAX_HOST_NAME_LENGTH) == EZN_ERROR) return EZN_ERROR;
-	struct hostent* hostentry;
-	gethostbyname(hostname);
+	struct hostent* hostentry = gethostbyname(hostname);
 	if (hostentry == NULL) return EZN_ERROR;
-	EZN_INFO("%s", hostentry->h_addr_list[0]);
-	strcpy(address, hostentry->h_addr_list[0]);
-	//then sokets and ports
+	strcpy(address, inet_ntoa(*((struct in_addr*)hostentry->h_addr_list[0])));
 	return EZN_NONE;
 }
 
