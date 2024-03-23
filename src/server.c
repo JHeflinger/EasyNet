@@ -46,9 +46,6 @@ int main(int argc, char* argv[]) {
 	} else {
 		EZN_WARN("Unable to properly execute client behavior");
 	}
-	 //   |
-	//	  -> server.branch(functionptr);
-	// server.wait();
 
 	status = ezn_close_server(&server);
 	if (status == EZN_NONE) {

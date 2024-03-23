@@ -29,13 +29,19 @@ EZN_STATUS ezn_servers_are_open(EZN_BOOL* result);
 EZN_STATUS ezn_clean_servers();
 EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_Behavior behavior);
 
-#ifdef __linux__
-
 EZN_STATUS ezn_generate_server(ezn_Server* server, uint16_t port) {
-    #error "Not implemented!"
 	EZN_SAFECHECK();
+    server->status = EZN_SERVER_CLOSED;
+    if (port < MIN_PORT || port > MAX_PORT) {
+        EZN_WARN("Invalid port detected. Please use a value between %d to %d", MIN_PORT, MAX_PORT);
+        return EZN_ERROR;
+    }
+    server->port = port;
+    server->type = EZN_TCP;
     return EZN_NONE;
 }
+
+#ifdef __linux__
 
 EZN_STATUS ezn_open_server(ezn_Server* server) {
     #error "Not implemented!"
@@ -68,18 +74,6 @@ EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_Behavior behavior) {
 }
 
 #elif _WIN32
-
-EZN_STATUS ezn_generate_server(ezn_Server* server, uint16_t port) {
-	EZN_SAFECHECK();
-    server->status = EZN_SERVER_CLOSED;
-    if (port < MIN_PORT || port > MAX_PORT) {
-        EZN_WARN("Invalid port detected. Please use a value between %d to %d", MIN_PORT, MAX_PORT);
-        return EZN_ERROR;
-    }
-    server->port = port;
-    server->type = EZN_TCP;
-    return EZN_NONE;
-}
 
 EZN_STATUS ezn_open_server(ezn_Server* server) {
 	EZN_SAFECHECK();
