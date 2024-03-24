@@ -16,14 +16,32 @@ typedef uint8_t EZN_BOOL;
 #define DEFAULT_PORT 44448
 
 #ifdef __linux__
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netdb.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
+
+#define EZN_SOCK int
+#define EZN_INVALID_SOCK -1
+#define EZN_PROTOCOL int
+#define EZN_TCP_PROTOCOL 0
+#define EZN_UDP_PROTOCOL 0
+#define EZN_CLOSE(...) close(__VA_ARGS__)
+
 #elif _WIN32
+
 #include <winsock2.h>
+
+#define EZN_SOCK SOCKET
+#define EZN_INVALID_SOCK INVALID_SOCKET
+#define EZN_PROTOCOL IPPROTO
+#define EZN_TCP_PROTOCOL IPPROTO_TCP
+#define EZN_UDP_PROTOCOL IPPROTO_UDP
+#define EZN_CLOSE(...) closesocket(__VA_ARGS__)
+
 #else
 #error Unsupported operating system detected!
 #endif
