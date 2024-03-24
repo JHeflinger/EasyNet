@@ -60,6 +60,12 @@ EZN_STATUS ezn_open_server(ezn_Server* server) {
         EZN_WARN("Unable to successfully create a valid socket. Unable top open server.");
         return EZN_ERROR;
     }
+	int optval = 1;
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+        EZN_WARN("Unable to set server socket options.");
+        EZN_CLOSE((EZN_SOCK)server_socket);
+		return EZN_ERROR;
+    }
     server->socket = (uint32_t)server_socket;
 
     struct sockaddr_in serverAddr;
