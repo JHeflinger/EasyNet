@@ -30,6 +30,7 @@ typedef uint8_t EZN_BOOL;
 #define EZN_TCP_PROTOCOL 0
 #define EZN_UDP_PROTOCOL 0
 #define EZN_CLOSE(...) close(__VA_ARGS__)
+#define EZN_OPT_TYPE int
 
 #elif _WIN32
 
@@ -41,6 +42,7 @@ typedef uint8_t EZN_BOOL;
 #define EZN_TCP_PROTOCOL IPPROTO_TCP
 #define EZN_UDP_PROTOCOL IPPROTO_UDP
 #define EZN_CLOSE(...) closesocket(__VA_ARGS__)
+#define EZN_OPT_TYPE char
 
 #else
 #error Unsupported operating system detected!
