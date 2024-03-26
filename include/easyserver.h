@@ -1,15 +1,6 @@
 #pragma once
 #include "netbasic.h"
 #include "easystructs.h"
-#include <stdint.h>
-
-#define EZN_TCP 0
-#define EZN_UDP 1
-typedef int EZN_SERVER_TYPE;
-
-#define EZN_SERVER_OPEN 0
-#define EZN_SERVER_CLOSED 1
-typedef int EZN_SERVER_STATUS;
 
 typedef struct {
     uint16_t port;
@@ -18,7 +9,7 @@ typedef struct {
     EZN_SERVER_TYPE type;
 } ezn_Server;
 
-typedef EZN_STATUS (*ezn_Behavior)(ezn_Server*, uint32_t);
+typedef EZN_STATUS (*ezn_ServerBehavior)(ezn_Server*, uint32_t);
 
 static ezn_SocketList* s_open_servers_head;
 
@@ -27,7 +18,7 @@ EZN_STATUS ezn_open_server(ezn_Server* server);
 EZN_STATUS ezn_close_server(ezn_Server* server);
 EZN_STATUS ezn_servers_are_open(EZN_BOOL* result);
 EZN_STATUS ezn_clean_servers();
-EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_Behavior behavior);
+EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_ServerBehavior behavior);
 
 EZN_STATUS ezn_generate_server(ezn_Server* server, uint16_t port) {
 	EZN_SAFECHECK();
@@ -57,7 +48,7 @@ EZN_STATUS ezn_open_server(ezn_Server* server) {
     else if (server->type == EZN_UDP) protocol = EZN_UDP_PROTOCOL;
     EZN_SOCK server_socket = socket(AF_INET, SOCK_STREAM, protocol);
     if (server_socket == EZN_INVALID_SOCK) {
-        EZN_WARN("Unable to successfully create a valid socket. Unable top open server.");
+        EZN_WARN("Unable to successfully create a valid socket. Unable to open server.");
         return EZN_ERROR;
     }
 	EZN_OPT_TYPE optval = 1;
@@ -69,6 +60,7 @@ EZN_STATUS ezn_open_server(ezn_Server* server) {
     server->socket = (uint32_t)server_socket;
 
     struct sockaddr_in serverAddr;
+	memset(&serverAddr, 0, sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY; // Listen on all interfaces
     serverAddr.sin_port = htons((u_short)(server->port));
@@ -151,7 +143,7 @@ EZN_STATUS ezn_clean_servers() {
     return EZN_NONE;
 }
 
-EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_Behavior behavior) {
+EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_ServerBehavior behavior) {
 	EZN_SAFECHECK();
     if (server->status != EZN_SERVER_OPEN) {
         EZN_WARN("Unable to accept connections on a server that is not open!");
@@ -166,7 +158,7 @@ EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_Behavior behavior) {
     EZN_STATUS behavior_result = behavior(server, (uint32_t)clientSocket);
     if (behavior_result == EZN_ERROR) {
         EZN_WARN("Exected behavior failed");
-        EZN_CLOSE(clientSocket);
+        EZN_CLOSE((EZN_SOCK)clientSocket);
         return EZN_ERROR;
     }
     EZN_CLOSE(clientSocket);

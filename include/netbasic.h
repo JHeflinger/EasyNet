@@ -10,10 +10,25 @@ typedef uint32_t EZN_STATUS;
 #define EZN_TRUE 1
 typedef uint8_t EZN_BOOL;
 
+#define EZN_TCP 0
+#define EZN_UDP 1
+typedef int EZN_SERVER_TYPE;
+typedef int EZN_CLIENT_TYPE;
+
+#define EZN_SERVER_OPEN 0
+#define EZN_SERVER_CLOSED 1
+typedef int EZN_SERVER_STATUS;
+
+#define EZN_CLIENT_CONNECTED 0
+#define EZN_CLIENT_DISCONNECTED 1 
+typedef int EZN_CLIENT_STATUS;
+
 #define MAX_IP_ADDR_LENGTH 64
 #define MIN_PORT 1024
 #define MAX_PORT 65535
 #define DEFAULT_PORT 44448
+
+#define IPV4_ADDR_LENGTH 4
 
 #ifdef __linux__
 
@@ -23,6 +38,7 @@ typedef uint8_t EZN_BOOL;
 #include <netdb.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
+#include <stdint.h>
 
 #define EZN_SOCK int
 #define EZN_INVALID_SOCK -1

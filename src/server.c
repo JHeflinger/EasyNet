@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	ezn_Server server;
-	status = ezn_generate_server(&server, 43367);
+	status = ezn_generate_server(&server, DEFAULT_PORT);
 	if (status == EZN_NONE) {
 		EZN_INFO("Successfully generated server device for port %d", server.port);
 	} else {
@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 	if (status == EZN_NONE) {
 		EZN_INFO("Finished taking clients");
 	} else {
-		EZN_WARN("Unable to properly execute client behavior");
+		EZN_WARN("Unable to properly execute server behavior");
 	}
 
 	status = ezn_close_server(&server);

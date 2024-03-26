@@ -12,6 +12,12 @@ cc_binary(
 )
 
 cc_binary(
+	name = "client",
+	srcs = ["src/client.c"],
+	deps = [":easynet"]
+)
+
+cc_binary(
 	name = "win_server",
 	srcs = ["src/server.c"],
 	deps = [":easynet"],
@@ -19,3 +25,13 @@ cc_binary(
 		"-DEFAULTLIB:ws2_32.lib",
 	]
 )
+
+cc_binary(
+	name = "win_client",
+	srcs = ["src/client.c"],
+	deps = [":easynet"],
+	linkopts = [
+		"-DEFAULTLIB:ws2_32.lib",
+	]
+)
+
