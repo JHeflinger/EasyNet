@@ -41,6 +41,7 @@ typedef uint8_t EZN_BYTE;
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include <stdint.h>
+#include <pthread.h>
 
 #define EZN_INVALID_SOCK -1
 #define EZN_PROTOCOL int
