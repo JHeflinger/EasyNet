@@ -1,8 +1,14 @@
 #include "easynet.h"
 
-EZN_STATUS client_behavior(ezn_Client* client, uint32_t serversock) {
-	EZN_INFO("banzai!");
-
+EZN_STATUS client_behavior(ezn_Client* client, EZN_SOCKET serversock) {
+	char buffer[1024];
+	EZN_SCAN("%[^\n]", buffer);
+	size_t returnlen;
+	if (ezn_send(serversock, buffer, strlen(buffer), &returnlen) == EZN_ERROR) {
+		EZN_WARN("send failed");
+		return EZN_ERROR;
+	}
+	EZN_INFO("Sent message: %s", buffer);
 	return EZN_NONE;
 }
 

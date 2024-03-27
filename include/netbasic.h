@@ -23,6 +23,8 @@ typedef int EZN_SERVER_STATUS;
 #define EZN_CLIENT_DISCONNECTED 1 
 typedef int EZN_CLIENT_STATUS;
 
+typedef uint8_t EZN_BTYE;
+
 #define MAX_IP_ADDR_LENGTH 64
 #define MIN_PORT 1024
 #define MAX_PORT 65535
@@ -40,25 +42,29 @@ typedef int EZN_CLIENT_STATUS;
 #include <arpa/inet.h>
 #include <stdint.h>
 
-#define EZN_SOCK int
 #define EZN_INVALID_SOCK -1
 #define EZN_PROTOCOL int
 #define EZN_TCP_PROTOCOL 0
 #define EZN_UDP_PROTOCOL 0
 #define EZN_CLOSE(...) close(__VA_ARGS__)
 #define EZN_OPT_TYPE int
+#define EZN_DONT_WAIT MSG_DONTWAIT
+
+typedef int EZN_SOCKET;
 
 #elif _WIN32
 
 #include <winsock2.h>
 
-#define EZN_SOCK SOCKET
 #define EZN_INVALID_SOCK INVALID_SOCKET
 #define EZN_PROTOCOL IPPROTO
 #define EZN_TCP_PROTOCOL IPPROTO_TCP
 #define EZN_UDP_PROTOCOL IPPROTO_UDP
 #define EZN_CLOSE(...) closesocket(__VA_ARGS__)
 #define EZN_OPT_TYPE char
+#define EZN_DONT_WAIT 0
+
+typedef SOCKET EZN_SOCKET;
 
 #else
 #error Unsupported operating system detected!

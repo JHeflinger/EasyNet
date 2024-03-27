@@ -4,12 +4,12 @@
 
 typedef struct {
     uint16_t port;
-    uint32_t socket;
+    EZN_SOCKET socket;
     EZN_SERVER_STATUS status;
     EZN_SERVER_TYPE type;
 } ezn_Server;
 
-typedef EZN_STATUS (*ezn_ServerBehavior)(ezn_Server*, uint32_t);
+typedef EZN_STATUS (*ezn_ServerBehavior)(ezn_Server*, EZN_SOCKET);
 
 static ezn_SocketList* s_open_servers_head;
 
@@ -46,32 +46,32 @@ EZN_STATUS ezn_open_server(ezn_Server* server) {
     EZN_PROTOCOL protocol;
     if (server->type == EZN_TCP) protocol = EZN_TCP_PROTOCOL;
     else if (server->type == EZN_UDP) protocol = EZN_UDP_PROTOCOL;
-    EZN_SOCK server_socket = socket(AF_INET, SOCK_STREAM, protocol);
+    EZN_SOCKET server_socket = socket(AF_INET, SOCK_STREAM, protocol);
     if (server_socket == EZN_INVALID_SOCK) {
         EZN_WARN("Unable to successfully create a valid socket. Unable to open server.");
         return EZN_ERROR;
     }
 	EZN_OPT_TYPE optval = 1;
-    if (setsockopt((EZN_SOCK)server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
         EZN_WARN("Unable to set server socket options.");
-        EZN_CLOSE((EZN_SOCK)server_socket);
+        EZN_CLOSE(server_socket);
 		return EZN_ERROR;
     }
-    server->socket = (uint32_t)server_socket;
+    server->socket = server_socket;
 
     struct sockaddr_in serverAddr;
 	memset(&serverAddr, 0, sizeof(serverAddr));
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY; // Listen on all interfaces
     serverAddr.sin_port = htons((u_short)(server->port));
-    if (bind((EZN_SOCK)(server->socket), (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == EZN_INVALID_SOCK) {
+    if (bind(server->socket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == EZN_INVALID_SOCK) {
         EZN_WARN("Unable to bind server socket");
-        EZN_CLOSE((EZN_SOCK)(server->socket));
+        EZN_CLOSE(server->socket);
         return EZN_ERROR;
     }
-    if (listen((EZN_SOCK)(server->socket), (SOMAXCONN) == EZN_INVALID_SOCK)) {
+    if (listen(server->socket, (SOMAXCONN) == EZN_INVALID_SOCK)) {
         EZN_WARN("Unable to listen for connections");
-        EZN_CLOSE((EZN_SOCK)(server->socket));
+        EZN_CLOSE(server->socket);
         return EZN_ERROR;
     }
     server->status = EZN_SERVER_OPEN;
@@ -102,7 +102,7 @@ EZN_STATUS ezn_close_server(ezn_Server* server) {
     if (tracker->socket == server->socket) {
         s_open_servers_head = tracker->next;
         free(tracker);
-        EZN_CLOSE((EZN_SOCK)(server->socket));
+        EZN_CLOSE(server->socket);
     } else {
         EZN_BOOL found = EZN_FALSE;
         while (tracker->next != NULL && found == EZN_FALSE) {
@@ -110,7 +110,7 @@ EZN_STATUS ezn_close_server(ezn_Server* server) {
                 ezn_SocketList* dead_node = tracker->next;
                 tracker->next = tracker->next->next;
                 free(dead_node);
-                EZN_CLOSE((EZN_SOCK)(server->socket));
+                EZN_CLOSE(server->socket);
                 found = EZN_TRUE;
             }
             tracker = tracker->next;
@@ -135,7 +135,7 @@ EZN_STATUS ezn_clean_servers() {
 	EZN_SAFECHECK();
     ezn_SocketList* tracker = s_open_servers_head;
     while (tracker != NULL) {
-        EZN_CLOSE((EZN_SOCK)(tracker->socket));
+        EZN_CLOSE(tracker->socket);
         tracker = tracker->next;
     }
     ezn_free_socketlist(s_open_servers_head);
@@ -155,10 +155,10 @@ EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_ServerBehavior behavior) {
         EZN_WARN("Failed to accept a connection");
         return EZN_ERROR;
     }
-    EZN_STATUS behavior_result = behavior(server, (uint32_t)clientSocket);
+    EZN_STATUS behavior_result = behavior(server, clientSocket);
     if (behavior_result == EZN_ERROR) {
         EZN_WARN("Exected behavior failed");
-        EZN_CLOSE((EZN_SOCK)clientSocket);
+        EZN_CLOSE(clientSocket);
         return EZN_ERROR;
     }
     EZN_CLOSE(clientSocket);

@@ -1,7 +1,15 @@
 #include "easynet.h"
 
-EZN_STATUS server_behavior(ezn_Server* server, uint32_t clientsock) {
-
+EZN_STATUS server_behavior(ezn_Server* server, EZN_SOCKET clientsock) {
+	char buffer[1024];
+	size_t returnlen;
+	if (ezn_recieve(clientsock, buffer, 1024, &returnlen) == EZN_ERROR) {
+		EZN_WARN("recieve failed");
+		return EZN_ERROR;
+	}
+	if (returnlen >= 1024) returnlen = 1024;
+	buffer[returnlen] = '\0';
+	EZN_INFO("Client said: %s", buffer);
 	return EZN_NONE;
 }
 

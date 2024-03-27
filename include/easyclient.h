@@ -6,12 +6,12 @@
 typedef struct {
 	uint8_t address[IPV4_ADDR_LENGTH];
 	uint16_t port;
-	uint32_t socket;
+	EZN_SOCKET socket;
 	EZN_CLIENT_STATUS status;
 	EZN_CLIENT_TYPE type;
 } ezn_Client;
 
-typedef EZN_STATUS (*ezn_ClientBehavior)(ezn_Client*, uint32_t);
+typedef EZN_STATUS (*ezn_ClientBehavior)(ezn_Client*, EZN_SOCKET);
 
 static ezn_SocketList* s_open_clients_head;
 
@@ -48,12 +48,12 @@ EZN_STATUS ezn_connect_client(ezn_Client* client, ezn_ClientBehavior behavior) {
 	EZN_PROTOCOL protocol;
 	if (client->type == EZN_TCP) protocol = EZN_TCP_PROTOCOL;
 	else if (client->type == EZN_UDP) protocol = EZN_UDP_PROTOCOL;
-	EZN_SOCK client_socket = socket(AF_INET, SOCK_STREAM, protocol);
+	EZN_SOCKET client_socket = socket(AF_INET, SOCK_STREAM, protocol);
 	if (client_socket == EZN_INVALID_SOCK) {
 		EZN_WARN("Unable to successfully create a valid socket. Unable to connect the client");
 		return EZN_ERROR;
 	}
-	client->socket = (uint32_t)client_socket;
+	client->socket = client_socket;
 
 	struct sockaddr_in serverAddr;
 	memset(&serverAddr, 0, sizeof(serverAddr));
@@ -63,13 +63,13 @@ EZN_STATUS ezn_connect_client(ezn_Client* client, ezn_ClientBehavior behavior) {
 	ezn_ipaddr_to_str(client->address, addrstr, 1024);
 	if (inet_pton(AF_INET, addrstr, &serverAddr.sin_addr) <= 0) {
 		EZN_WARN("Client has invalid IP address, unable to connect");
-		EZN_CLOSE((EZN_SOCK)client->socket);
+		EZN_CLOSE(client->socket);
 		return EZN_ERROR;
 	}
 
 	if (connect(client->socket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) == -1) {
 		EZN_WARN("Unable to connect configured client to server");
-		EZN_CLOSE((EZN_SOCK)client->socket);
+		EZN_CLOSE(client->socket);
 		return EZN_ERROR;
 	}
 
@@ -85,10 +85,10 @@ EZN_STATUS ezn_connect_client(ezn_Client* client, ezn_ClientBehavior behavior) {
 		s_open_clients_head = next_open_socket;
 	}
 
-	EZN_STATUS behavior_result = behavior(client, (uint32_t)client->socket);
+	EZN_STATUS behavior_result = behavior(client, client->socket);
 	if (behavior_result == EZN_ERROR) {
 		EZN_WARN("An error occurred while performing the given dynamic behavior");
-		EZN_CLOSE((EZN_SOCK)client->socket);
+		EZN_CLOSE(client->socket);
 		return EZN_ERROR;
 	}
 
@@ -109,7 +109,7 @@ EZN_STATUS ezn_disconnect_client(ezn_Client* client) {
 	if (tracker->socket == client->socket) {
 		s_open_clients_head = tracker->next;
 		free(tracker);
-		EZN_CLOSE((EZN_SOCK)(client->socket));
+		EZN_CLOSE(client->socket);
 	} else {
 		EZN_BOOL found = EZN_FALSE;
 		while (tracker->next != NULL && found == EZN_FALSE) {
@@ -117,7 +117,7 @@ EZN_STATUS ezn_disconnect_client(ezn_Client* client) {
 				ezn_SocketList* dead_node = tracker->next;
 				tracker->next = tracker->next->next;
 				free(dead_node);
-				EZN_CLOSE((EZN_SOCK)(client->socket));
+				EZN_CLOSE(client->socket);
 				found = EZN_TRUE;
 			}
 			tracker = tracker->next;
@@ -142,7 +142,7 @@ EZN_STATUS ezn_clean_clients() {
 	EZN_SAFECHECK();
 	ezn_SocketList* tracker = s_open_clients_head;
 	while (tracker != NULL) {
-		EZN_CLOSE((EZN_SOCK)(tracker->socket));
+		EZN_CLOSE(tracker->socket);
 		tracker = tracker->next;
 	}
 	ezn_free_socketlist(s_open_clients_head);
