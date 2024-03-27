@@ -6,7 +6,7 @@ EZN_STATUS client_behavior(ezn_Client* client, EZN_SOCKET serversock) {
 	while (EZN_TRUE) {
 		memset(buffer, '\0', 1024);
 		EZN_SCAN("%[^\n]%*c", buffer);
-		if (ezn_send(serversock, buffer, strlen(buffer), &returnlen) == EZN_ERROR) {
+		if (ezn_send(serversock, (EZN_BYTE*)buffer, strlen(buffer), &returnlen) == EZN_ERROR) {
 			EZN_WARN("send failed");
 			return EZN_ERROR;
 		}

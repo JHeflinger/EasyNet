@@ -4,8 +4,8 @@ EZN_STATUS server_behavior(ezn_Server* server, EZN_SOCKET clientsock) {
 	char buffer[1024];
 	size_t returnlen;
 	while (EZN_TRUE) {
-		memset(buffer, 0, 1024);
-		if (ezn_ask(clientsock, buffer, 1024, &returnlen) == EZN_ERROR) {
+		memset(buffer, '\0', 1024);
+		if (ezn_ask(clientsock, (EZN_BYTE*)buffer, 1024, &returnlen) == EZN_ERROR) {
 			EZN_WARN("recieve failed");
 			return EZN_ERROR;
 		}

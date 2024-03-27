@@ -23,7 +23,7 @@ typedef int EZN_SERVER_STATUS;
 #define EZN_CLIENT_DISCONNECTED 1 
 typedef int EZN_CLIENT_STATUS;
 
-typedef uint8_t EZN_BTYE;
+typedef uint8_t EZN_BYTE;
 
 #define MAX_IP_ADDR_LENGTH 64
 #define MIN_PORT 1024
