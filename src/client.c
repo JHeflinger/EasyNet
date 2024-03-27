@@ -2,13 +2,19 @@
 
 EZN_STATUS client_behavior(ezn_Client* client, EZN_SOCKET serversock) {
 	char buffer[1024];
-	EZN_SCAN("%[^\n]", buffer);
 	size_t returnlen;
-	if (ezn_send(serversock, buffer, strlen(buffer), &returnlen) == EZN_ERROR) {
-		EZN_WARN("send failed");
-		return EZN_ERROR;
+	while (EZN_TRUE) {
+		memset(buffer, '\0', 1024);
+		EZN_SCAN("%[^\n]%*c", buffer);
+		if (ezn_send(serversock, buffer, strlen(buffer), &returnlen) == EZN_ERROR) {
+			EZN_WARN("send failed");
+			return EZN_ERROR;
+		}
+		if (buffer[0] == ';' && buffer[1] == ';' && buffer[2] == ';' && buffer[3] == '\0') {
+			EZN_INFO("Exiting client...");
+			break;
+		}
 	}
-	EZN_INFO("Sent message: %s", buffer);
 	return EZN_NONE;
 }
 
