@@ -32,6 +32,8 @@ typedef uint8_t EZN_BYTE;
 
 #define IPV4_ADDR_LENGTH 4
 
+#define EZN_ACCEPT_FOREVER -1
+
 #ifdef __linux__
 
 #include <sys/types.h>
@@ -43,6 +45,8 @@ typedef uint8_t EZN_BYTE;
 #include <stdint.h>
 #include <pthread.h>
 
+typedef int EZN_SOCKET;
+
 #define EZN_INVALID_SOCK -1
 #define EZN_PROTOCOL int
 #define EZN_TCP_PROTOCOL 0
@@ -51,11 +55,13 @@ typedef uint8_t EZN_BYTE;
 #define EZN_OPT_TYPE int
 #define EZN_DONT_WAIT MSG_DONTWAIT
 
-typedef int EZN_SOCKET;
-
 #elif _WIN32
 
 #include <winsock2.h>
+
+typedef HANDLE EZN_THREAD;
+typedef HANDLE EZN_MUTEX;
+typedef SOCKET EZN_SOCKET;
 
 #define EZN_INVALID_SOCK INVALID_SOCKET
 #define EZN_PROTOCOL IPPROTO
@@ -64,8 +70,12 @@ typedef int EZN_SOCKET;
 #define EZN_CLOSE(...) closesocket(__VA_ARGS__)
 #define EZN_OPT_TYPE char
 #define EZN_DONT_WAIT 0
-
-typedef SOCKET EZN_SOCKET;
+#define EZN_CREATE_THREAD(func, parameters) CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)func, (LPVOID)parameters, 0, NULL)
+#define EZN_WAIT_THREAD(thread) WaitForSingleObject(thread, INFINITE)
+#define EZN_CLOSE_THREAD(thread) CloseHandle(thread)
+#define EZN_CREATE_MUTEX() CreateMutex(NULL, FALSE, NULL)
+#define EZN_LOCK_MUTEX(mutex) WaitForSingleObject(mutex, INFINITE)
+#define EZN_RELEASE_MUTEX(mutex) ReleaseMutex(mutex)
 
 #else
 #error Unsupported operating system detected!

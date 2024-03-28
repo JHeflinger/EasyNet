@@ -19,6 +19,7 @@ EZN_STATUS ezn_close_server(ezn_Server* server);
 EZN_STATUS ezn_servers_are_open(EZN_BOOL* result);
 EZN_STATUS ezn_clean_servers();
 EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_ServerBehavior behavior);
+EZN_STATUS ezn_server_queue(ezn_Server* server, ezn_ServerBehavior behavior, int queuesize);
 
 EZN_STATUS ezn_generate_server(ezn_Server* server, uint16_t port) {
 	EZN_SAFECHECK();
@@ -162,5 +163,17 @@ EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_ServerBehavior behavior) {
         return EZN_ERROR;
     }
     EZN_CLOSE(clientSocket);
+    return EZN_NONE;
+}
+
+EZN_STATUS ezn_server_queue(ezn_Server* server, ezn_ServerBehavior behavior, int queuesize) {
+	EZN_SAFECHECK();
+    while (queuesize > 0 || queuesize == EZN_ACCEPT_FOREVER) {
+        if (ezn_server_accept(server, behavior) == EZN_ERROR) {
+            EZN_WARN("An error occured while accepting a connection");
+            return EZN_ERROR;
+        }
+        if (queuesize != EZN_ACCEPT_FOREVER) queuesize--;
+    }
     return EZN_NONE;
 }
