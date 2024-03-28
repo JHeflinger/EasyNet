@@ -20,6 +20,7 @@ int input_ind = 0;
 EZN_BOOL shutdown_flag = EZN_FALSE;
 PacketLog* packet_log_head = NULL;
 PacketLog* packet_log_tail = NULL;
+char addr[MAX_IP_ADDR_LENGTH];
 
 void add_filled_packet() {
 	PacketLog* newlog = malloc(sizeof(PacketLog));
@@ -98,12 +99,11 @@ int _kbhit(void) {
 #endif
 
 void input_handler(void* params) {
-	EZN_INFO("Connected to a new client!");
 	EZN_SOCKET clientsock = ((Handler_args*)params)->client_socket;
 	size_t returnlen;
 	EZN_LOCK_MUTEX(mutex);
 	reset_prompt(EZN_FALSE);
-	printf("prompt> ");
+	printf("\nprompt> ");
 	EZN_RELEASE_MUTEX(mutex);
 	while (EZN_TRUE) {
 		if (shutdown_flag == EZN_TRUE) return;
@@ -114,7 +114,7 @@ void input_handler(void* params) {
 			char ch = _getch();
 		#endif
 			EZN_LOCK_MUTEX(mutex);
-			if (ch == '\b') {
+			if (ch == '\b' || ch == 127) {
 				if (input_ind > 0 || packet_log_head != NULL) {
 					input_ind--;
 					if (input_ind < 0) {
@@ -155,7 +155,7 @@ void input_handler(void* params) {
 						char lag_buffer[PACKETSIZE];
 						strcpy(lag_buffer, input_buffer);
 						reset_prompt(EZN_TRUE);
-						printf("prompt> ");
+						printf("\nprompt> ");
 					}
 				} else {
 					PacketLog* curr = packet_log_head;
@@ -170,7 +170,7 @@ void input_handler(void* params) {
 						char lag_buffer[PACKETSIZE];
 						strcpy(lag_buffer, input_buffer);
 						reset_prompt(EZN_TRUE);
-						printf("prompt> ");
+						printf("\nprompt> ");
 					}
 				}
 			} else {
@@ -240,7 +240,9 @@ void output_handler(void* params) {
 			if (backlog_head == NULL && buffer[0] == ';' && buffer[1] == ';' && buffer[2] == ';' && buffer[3] == '\0') {
 				EZN_LOCK_MUTEX(mutex);
 				reset_prompt(EZN_FALSE);
-				EZN_INFO("Client disconnected... ending chat session with client");
+				//EZN_INFO("Client disconnected... ending chat session with client");
+				printf("Client finished, now waiting to service another client...\n");
+				printf("\n***********************************************************\n");
 				shutdown_flag = EZN_TRUE;
 				EZN_RELEASE_MUTEX(mutex);
 				return;
@@ -268,7 +270,7 @@ void output_handler(void* params) {
 			}
 			printf("%s\n", buffer);
 
-			printf("prompt> ");
+			printf("\nprompt> ");
 			curr = packet_log_head;
 			while (curr != NULL) {
 				char inter[PACKETSIZE + 1];
@@ -285,6 +287,8 @@ void output_handler(void* params) {
 }
 
 EZN_STATUS server_behavior(ezn_Server* server, EZN_SOCKET clientsock) {
+	printf("\nRecieved connection request from /%s\n", addr);
+	printf("\n***********************************************************\n");
 	Handler_args inargs;
 	Handler_args outargs;
 	inargs.client_socket = clientsock;
@@ -307,36 +311,38 @@ EZN_STATUS server_behavior(ezn_Server* server, EZN_SOCKET clientsock) {
 }
 
 int main(int argc, char* argv[]) {
-	ezn_init();
-
-	char name[MAX_HOST_NAME_LENGTH];
-	char addr[MAX_IP_ADDR_LENGTH];
-
-	EZN_STATUS status = ezn_hostname(name, MAX_HOST_NAME_LENGTH);
-	if (status == EZN_NONE) {
-		EZN_INFO("The hostname is %s", name);
-	} else {
-		EZN_FATAL("Hostname could not be detected, internal error found");
+	if (argc != 2) {
+		EZN_FATAL("Invalid number of arguments detected - please use the program in the following format:\n\tserver <server-port>");
 	}
 
-	status = ezn_hostaddress(addr, MAX_HOST_NAME_LENGTH);
+	ezn_init();
+
+	uint16_t port;
+
+	if (ezn_str_to_port(&port, argv[1]) == EZN_ERROR) {
+		EZN_FATAL("Invalid port detected, please use a valid port from %d to %d.", MIN_PORT, MAX_PORT);
+	}
+
+	EZN_STATUS status = ezn_hostaddress(addr, MAX_HOST_NAME_LENGTH);
 	if (status == EZN_NONE) {
-		EZN_INFO("The host ip is %s", addr);
+		//EZN_INFO("The host ip is %s", addr);
 	} else {
 		EZN_FATAL("Host IP could not be detected, internal error found");
 	}
 
 	ezn_Server server;
-	status = ezn_generate_server(&server, DEFAULT_PORT);
+	status = ezn_generate_server(&server, port);
 	if (status == EZN_NONE) {
-		EZN_INFO("Successfully generated server device for port %d", server.port);
+		//EZN_INFO("Successfully generated server device for port %d", server.port);
+		printf("\nSerial Server on host 0.0.0.0/0.0.0.0 is listening on port %s\n", argv[1]);
 	} else {
 		EZN_FATAL("Unable to generate server device");
 	}
 	
 	status = ezn_open_server(&server);
 	if (status == EZN_NONE) {
-		EZN_INFO("Successfully opened server on port %d", server.port);
+		//EZN_INFO("Successfully opened server on port %d", server.port);
+		printf("\nSerial Server starting, listening on port %s\n", argv[1]);
 	} else {
 		EZN_FATAL("Unable to open server");
 	}

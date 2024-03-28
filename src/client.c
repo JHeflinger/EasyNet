@@ -100,7 +100,7 @@ void input_handler(void* params) {
 	size_t returnlen;
 	EZN_LOCK_MUTEX(mutex);
 	reset_prompt(EZN_FALSE);
-	printf("prompt> ");
+	printf("\nprompt> ");
 	EZN_RELEASE_MUTEX(mutex);
 	while (EZN_TRUE) {
 		if (shutdown_flag == EZN_TRUE) return;
@@ -111,7 +111,7 @@ void input_handler(void* params) {
 			char ch = _getch();
 		#endif
 			EZN_LOCK_MUTEX(mutex);
-			if (ch == '\b') {
+			if (ch == '\b' || ch == 127) {
 				if (input_ind > 0 || packet_log_head != NULL) {
 					input_ind--;
 					if (input_ind < 0) {
@@ -143,7 +143,9 @@ void input_handler(void* params) {
 						EZN_WARN("Disconnect packet failed to send...");
 					}
 					reset_prompt(EZN_FALSE);
-					EZN_INFO("Disconnecting client...");
+					//EZN_INFO("Disconnecting client...");
+					printf("User entered sentinel of \";;;\", now stopping client\n");
+					printf("\n***********************************************************\n\n");
 					shutdown_flag = EZN_TRUE;
 					EZN_RELEASE_MUTEX(mutex);
 					return;
@@ -155,7 +157,7 @@ void input_handler(void* params) {
 						char lag_buffer[PACKETSIZE];
 						strcpy(lag_buffer, input_buffer);
 						reset_prompt(EZN_TRUE);
-						printf("prompt> ");
+						printf("\nprompt> ");
 					}
 				} else {
 					PacketLog* curr = packet_log_head;
@@ -170,7 +172,7 @@ void input_handler(void* params) {
 						char lag_buffer[PACKETSIZE];
 						strcpy(lag_buffer, input_buffer);
 						reset_prompt(EZN_TRUE);
-						printf("prompt> ");
+						printf("\nprompt> ");
 					}
 				}
 			} else {
@@ -237,14 +239,6 @@ void output_handler(void* params) {
 		}
 
 		if (handle == EZN_TRUE) {
-			if (backlog_head == NULL && buffer[0] == ';' && buffer[1] == ';' && buffer[2] == ';' && buffer[3] == '\0') {
-				printf("\n");
-				EZN_INFO("Server was killed...");
-				EZN_LOCK_MUTEX(mutex);
-				shutdown_flag = EZN_TRUE;
-				EZN_RELEASE_MUTEX(mutex);
-				return;
-			}
 			EZN_LOCK_MUTEX(mutex);
 
 			int num_precurses = 8 + strlen(input_buffer);
@@ -268,7 +262,7 @@ void output_handler(void* params) {
 			}
 			printf("%s\n", buffer);
 
-			printf("prompt> ");
+			printf("\nprompt> ");
 			curr = packet_log_head;
 			while (curr != NULL) {
 				char inter[PACKETSIZE + 1];
@@ -285,6 +279,8 @@ void output_handler(void* params) {
 }
 
 EZN_STATUS client_behavior(ezn_Client* client, EZN_SOCKET serversock) {
+	printf("Connection established, now waiting for user input...\n");
+
 	Handler_args inargs;
 	Handler_args outargs;
 	inargs.server_socket = serversock;
@@ -305,34 +301,49 @@ EZN_STATUS client_behavior(ezn_Client* client, EZN_SOCKET serversock) {
 }
 
 int main(int argc, char* argv[]) {
+	if (argc != 3) {
+		EZN_FATAL("Invalid number of arguments detected - please use the program in the following format:\n\tclient <server-IP-address> <server-port>");
+	}
+
 	ezn_init();
 
 	ezn_Client client;
-	uint8_t address[IPV4_ADDR_LENGTH];
-	ezn_set_ipv4_addr(address, 127, 0, 0, 1);
 	EZN_STATUS status;
+	uint8_t address[IPV4_ADDR_LENGTH];
+	uint16_t port;
 
+	if (ezn_str_to_ipaddr(address, argv[1]) == EZN_ERROR) {
+		EZN_FATAL("Invalid IP address detected, please use a valid IPv4 address.");
+	}
+
+	if (ezn_str_to_port(&port, argv[2]) == EZN_ERROR) {
+		EZN_FATAL("Invalid port detected, please use a valid port from %d to %d.", MIN_PORT, MAX_PORT);
+	}
+	
 	char addrstr[1024];
 	ezn_ipaddr_to_str(address, addrstr, 1024);
-	EZN_INFO("Connecting client to %s on port %d", addrstr, DEFAULT_PORT);
+	//EZN_INFO("Connecting client to %s on port %d", addrstr, port);
 
-	status = ezn_configure_client(&client, DEFAULT_PORT, address);
+	status = ezn_configure_client(&client, port, address);
 	if (status == EZN_NONE) {
-		EZN_INFO("Successfully configured client");
+		//EZN_INFO("Successfully configured client");
+		printf("\nClient has requested to start connection with host %s on port %s\n", argv[1], argv[2]);
+		printf("\n***********************************************************\n\n");
 	} else {
 		EZN_FATAL("An error occurred while configuring the client");
 	}
 
 	status = ezn_connect_client(&client, client_behavior);
 	if (status == EZN_NONE) {
-		EZN_INFO("Finished talking to server!");
+		//EZN_INFO("Finished talking to server!");
+		printf("Attempting to shut down client sockets and other streams\n\n");
 	} else {
 		EZN_WARN("Unable to properly connect client");
 	}
 
 	status = ezn_disconnect_client(&client);
 	if (status == EZN_NONE) {
-		EZN_INFO("Successfully disconnected client");
+		//EZN_INFO("Successfully disconnected client");
 	} else {
 		EZN_FATAL("Unable to disconnect client!");
 	}
@@ -340,6 +351,8 @@ int main(int argc, char* argv[]) {
 	status = ezn_safe_clean();
 	if (status == EZN_ERROR) {
 		EZN_WARN("Unable to successfully perform a safe clean");
+	} else {
+		printf("Shut down successful.... goodbye\n");
 	}
 
 	ezn_clean();
