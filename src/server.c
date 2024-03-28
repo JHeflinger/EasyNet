@@ -264,7 +264,7 @@ EZN_STATUS server_behavior(ezn_Server* server, EZN_SOCKET clientsock) {
 	inargs.client_socket = clientsock;
 	outargs.client_socket = clientsock;
 
-	mutex = EZN_CREATE_MUTEX();
+	EZN_CREATE_MUTEX(mutex);
 	if (mutex == NULL) {
 		EZN_WARN("unable to create mutex");
 		return EZN_ERROR;
@@ -272,8 +272,10 @@ EZN_STATUS server_behavior(ezn_Server* server, EZN_SOCKET clientsock) {
 
 	shutdown_flag = EZN_FALSE;
 
-	EZN_THREAD output_handler_thread = EZN_CREATE_THREAD(output_handler, &outargs);
-	EZN_THREAD input_handler_thread = EZN_CREATE_THREAD(input_handler, &inargs);
+	EZN_THREAD output_handler_thread;
+	EZN_THREAD input_handler_thread;
+	EZN_CREATE_THREAD(output_handler_thread, output_handler, &outargs);
+	EZN_CREATE_THREAD(input_handler_thread, input_handler, &inargs);
 	if (input_handler_thread == NULL || output_handler_thread == NULL) {
 		EZN_WARN("unable to create threads");
 		return EZN_ERROR;

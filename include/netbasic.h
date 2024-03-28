@@ -45,6 +45,8 @@ typedef uint8_t EZN_BYTE;
 #include <stdint.h>
 #include <pthread.h>
 
+typedef pthread_t EZN_THREAD;
+typedef pthread_mutex_t EZN_MUTEX;
 typedef int EZN_SOCKET;
 
 #define EZN_INVALID_SOCK -1
@@ -54,6 +56,12 @@ typedef int EZN_SOCKET;
 #define EZN_CLOSE(...) close(__VA_ARGS__)
 #define EZN_OPT_TYPE int
 #define EZN_DONT_WAIT MSG_DONTWAIT
+#define EZN_CREATE_THREAD(thread, func, parameters) pthread_create(&thread, NULL, func, parameters)
+#define EZN_WAIT_THREAD(thread) pthread_join(thread, NULL)
+#define EZN_CLOSE_THREAD(thread)
+#define EZN_CREATE_MUTEX(mutex) pthread_mutex_init(&mutex, NULL)
+#define EZN_LOCK_MUTEX(mutex) pthread_mutex_lock(&mutex)
+#define EZN_RELEASE_MUTEX(mutex) pthread_mutex_unlock(&mutex)
 
 #elif _WIN32
 
@@ -70,10 +78,10 @@ typedef SOCKET EZN_SOCKET;
 #define EZN_CLOSE(...) closesocket(__VA_ARGS__)
 #define EZN_OPT_TYPE char
 #define EZN_DONT_WAIT 0
-#define EZN_CREATE_THREAD(func, parameters) CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)func, (LPVOID)parameters, 0, NULL)
+#define EZN_CREATE_THREAD(thread, func, parameters) thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)func, (LPVOID)parameters, 0, NULL)
 #define EZN_WAIT_THREAD(thread) WaitForSingleObject(thread, INFINITE)
 #define EZN_CLOSE_THREAD(thread) CloseHandle(thread)
-#define EZN_CREATE_MUTEX() CreateMutex(NULL, FALSE, NULL)
+#define EZN_CREATE_MUTEX(mutex) mutex = CreateMutex(NULL, FALSE, NULL)
 #define EZN_LOCK_MUTEX(mutex) WaitForSingleObject(mutex, INFINITE)
 #define EZN_RELEASE_MUTEX(mutex) ReleaseMutex(mutex)
 
