@@ -44,6 +44,10 @@ typedef uint8_t EZN_BYTE;
 #include <arpa/inet.h>
 #include <stdint.h>
 #include <pthread.h>
+#include <termios.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 
 typedef pthread_t EZN_THREAD;
 typedef pthread_mutex_t EZN_MUTEX;
@@ -56,7 +60,7 @@ typedef int EZN_SOCKET;
 #define EZN_CLOSE(...) close(__VA_ARGS__)
 #define EZN_OPT_TYPE int
 #define EZN_DONT_WAIT MSG_DONTWAIT
-#define EZN_CREATE_THREAD(thread, func, parameters) pthread_create(&thread, NULL, func, parameters)
+#define EZN_CREATE_THREAD(thread, func, parameters) pthread_create(&thread, NULL, (void* (*)(void*))func, parameters)
 #define EZN_WAIT_THREAD(thread) pthread_join(thread, NULL)
 #define EZN_CLOSE_THREAD(thread)
 #define EZN_CREATE_MUTEX(mutex) pthread_mutex_init(&mutex, NULL)

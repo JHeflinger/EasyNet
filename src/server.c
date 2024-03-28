@@ -16,7 +16,7 @@ typedef struct PacketLog PacketLog;
 
 EZN_MUTEX mutex;
 char input_buffer[PACKETSIZE];
-char input_ind = 0;
+int input_ind = 0;
 EZN_BOOL shutdown_flag = EZN_FALSE;
 PacketLog* packet_log_head = NULL;
 PacketLog* packet_log_tail = NULL;
@@ -75,6 +75,34 @@ void reset_prompt(EZN_BOOL logit) {
 	}
 }
 
+#ifdef __linux__
+int _kbhit(void) {
+	struct termios oldt, newt;
+	int ch;
+	int oldf;
+ 
+  tcgetattr(STDIN_FILENO, &oldt);
+  newt = oldt;
+  newt.c_lflag &= ~(ICANON | ECHO);
+  tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+  oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+  fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+ 
+  ch = getchar();
+ 
+  tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+  fcntl(STDIN_FILENO, F_SETFL, oldf);
+ 
+  if(ch != EOF)
+  {
+    ungetc(ch, stdin);
+    return 1;
+  }
+ 
+  return 0;
+}
+#endif
+
 void input_handler(void* params) {
 	EZN_INFO("Connected to a new client!");
 	EZN_SOCKET clientsock = ((Handler_args*)params)->client_socket;
@@ -85,8 +113,12 @@ void input_handler(void* params) {
 	EZN_RELEASE_MUTEX(mutex);
 	while (EZN_TRUE) {
 		if (shutdown_flag == EZN_TRUE) return;
-        if (_kbhit()) {
-            char ch = _getch();
+		if (_kbhit()) {
+		#ifdef __linux__
+            char ch = getchar();
+		#elif _WIN32
+			char ch = _getch();
+		#endif
 			EZN_LOCK_MUTEX(mutex);
 			if (ch == '\b') {
 				if (input_ind > 0 || packet_log_head != NULL) {
@@ -265,10 +297,6 @@ EZN_STATUS server_behavior(ezn_Server* server, EZN_SOCKET clientsock) {
 	outargs.client_socket = clientsock;
 
 	EZN_CREATE_MUTEX(mutex);
-	if (mutex == NULL) {
-		EZN_WARN("unable to create mutex");
-		return EZN_ERROR;
-	}
 
 	shutdown_flag = EZN_FALSE;
 
@@ -276,10 +304,6 @@ EZN_STATUS server_behavior(ezn_Server* server, EZN_SOCKET clientsock) {
 	EZN_THREAD input_handler_thread;
 	EZN_CREATE_THREAD(output_handler_thread, output_handler, &outargs);
 	EZN_CREATE_THREAD(input_handler_thread, input_handler, &inargs);
-	if (input_handler_thread == NULL || output_handler_thread == NULL) {
-		EZN_WARN("unable to create threads");
-		return EZN_ERROR;
-	}
 	EZN_WAIT_THREAD(output_handler_thread);
 	EZN_WAIT_THREAD(input_handler_thread);
 	EZN_CLOSE_THREAD(output_handler_thread);
