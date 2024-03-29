@@ -1,1 +1,1 @@
-bazel run $1
+bazel run $1 $2 $3
