@@ -1,8 +1,8 @@
 #include "easynet.h"
 
 #define PACKETSIZE 8
-#define EXTRA_CUSTOM() printf("%s[-ME-]%s  ", PURPLE, RESET)
-#define CHAT_CUSTOM() printf("%s[CHAT]%s  ", CYAN, RESET)
+#define EXTRA_CUSTOM() printf("%s[-ME-]%s  ", EZN_PURPLE, EZN_RESET)
+#define CHAT_CUSTOM() printf("%s[CHAT]%s  ", EZN_CYAN, EZN_RESET)
 
 typedef struct {
 	EZN_SOCKET server_socket;

@@ -69,6 +69,9 @@ typedef int EZN_SOCKET;
 
 #elif _WIN32
 
+#define WIN32_LEAN_AND_MEAN
+
+#include <stdlib.h>
 #include <winsock2.h>
 
 typedef HANDLE EZN_THREAD;
