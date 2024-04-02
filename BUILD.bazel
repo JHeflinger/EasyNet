@@ -2,6 +2,7 @@ cc_library(
 	name = "easynet",
 	includes = ["include"],
 	hdrs = glob(["include/*.h"]),
+	srcs = glob(["include/*.c"]),
 	visibility = ["//visibility:public"]
 )
 

@@ -1,4 +1,6 @@
-#pragma once
+#ifndef EASYLOG
+#define EASYLOG
+
 #include <stdio.h>
 
 #define EZN_RESET "\033[0m"
@@ -16,3 +18,5 @@
 #define EZN_CUSTOM(precursor, ...) {printf("%s[%s]%s  ", EZN_CYAN, precursor, EZN_RESET);   printf(__VA_ARGS__); printf("\n");}
 #define EZN_SCAN(...)  {printf("%s[INPUT]%s ", EZN_PURPLE, EZN_RESET); scanf(__VA_ARGS__);}
 #define EZN_ASSERT(check, ...) {if (!check) EZN_FATAL(__VA_ARGS__);}
+
+#endif
