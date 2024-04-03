@@ -347,7 +347,7 @@ int main(int argc, char* argv[]) {
 		EZN_FATAL("Unable to open server");
 	}
 
-	status = ezn_server_queue(&server, server_behavior, EZN_ACCEPT_FOREVER);
+	status = ezn_server_queue(&server, server_behavior, EZN_ACCEPT_FOREVER, EZN_TRUE);
 	if (status == EZN_NONE) {
 		EZN_INFO("Finished taking clients");
 	} else {

@@ -125,7 +125,7 @@ EZN_STATUS ezn_clean_servers() {
     return EZN_NONE;
 }
 
-EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_ServerBehavior behavior) {
+EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_ServerBehavior behavior, EZN_BOOL implicit_close) {
 	EZN_SAFECHECK();
     if (server->status != EZN_SERVER_OPEN) {
         EZN_WARN("Unable to accept connections on a server that is not open!");
@@ -143,14 +143,15 @@ EZN_STATUS ezn_server_accept(ezn_Server* server, ezn_ServerBehavior behavior) {
         EZN_CLOSE(clientSocket);
         return EZN_ERROR;
     }
-    EZN_CLOSE(clientSocket);
+    if (implicit_close == EZN_TRUE)
+        EZN_CLOSE(clientSocket);
     return EZN_NONE;
 }
 
-EZN_STATUS ezn_server_queue(ezn_Server* server, ezn_ServerBehavior behavior, int queuesize) {
+EZN_STATUS ezn_server_queue(ezn_Server* server, ezn_ServerBehavior behavior, int queuesize, EZN_BOOL implicit_close) {
 	EZN_SAFECHECK();
     while (queuesize > 0 || queuesize == EZN_ACCEPT_FOREVER) {
-        if (ezn_server_accept(server, behavior) == EZN_ERROR) {
+        if (ezn_server_accept(server, behavior, implicit_close) == EZN_ERROR) {
             EZN_WARN("An error occured while accepting a connection");
             return EZN_ERROR;
         }
