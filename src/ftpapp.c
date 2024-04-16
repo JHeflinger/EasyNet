@@ -29,15 +29,29 @@ EZN_BOOL lock_rec = EZN_FALSE;
 char addr[MAX_IP_ADDR_LENGTH];
 FT_State ftstate = DEFAULT;
 
+void get_filename(char* filename, char* filepath) {
+	size_t start = 0;
+	size_t end = 0;
+	size_t ind = 0;
+	while (filepath[ind] != '\0') {
+		if (filepath[ind] == '/') {
+			start = ind+1;
+		}
+		ind++;
+		end = ind;
+	}
+	memcpy(filename, filepath + start, end - start + 1);
+}
+
 void input_handler(void* params) {
 	EZN_SOCKET connectedsocket = ((Handler_args*)params)->socket_arg;
 	size_t returnlen;
 	EZN_LOCK_MUTEX(mutex);
-	printf("> ");
 	EZN_RELEASE_MUTEX(mutex);
 	char file_to_handle[PACKETSIZE];
 	while (EZN_TRUE) {
 		if (shutdown_flag == EZN_TRUE) return;
+		printf("> ");
 		scanf("%[^\n]%*c", input_buffer);
 		EZN_LOCK_MUTEX(mutex);
 		char process_cmd[PACKETSIZE*2];
@@ -57,7 +71,6 @@ void input_handler(void* params) {
 			struct stat info;
 			EZN_BOOL is_real = stat(input_buffer, &info) == 0;
 			#endif
-			printf("> ");
 			if (is_real) {
 				lock_rec = EZN_TRUE;
 				if (ezn_send(connectedsocket, (EZN_BYTE*)file_to_handle, strlen(file_to_handle) + 1, &returnlen) == EZN_ERROR) {
@@ -70,7 +83,25 @@ void input_handler(void* params) {
 						if (returnlen > 0 && returnlen < PACKETSIZE) {
 							uint64_t numbytes;
 							memcpy(&numbytes, header, sizeof(uint64_t));
-							EZN_INFO("TODO: btw ready to recieve %d bytes", (int)numbytes);
+							printf("    file transfer started...\n");
+							char* downloaded = calloc((size_t)numbytes, sizeof(char));
+							for (uint64_t i = 0; i < numbytes; i++) {
+								if (ezn_recieve(connectedsocket, (EZN_BYTE*)downloaded + i, 1, &returnlen) == EZN_ERROR) {
+									EZN_WARN("error while recieving bytes");
+								}
+							}
+							char filename[PACKETSIZE];
+							get_filename(filename, file_to_handle + 1);
+							char fullpath[PACKETSIZE*2];
+							sprintf(fullpath, "%s/%s", input_buffer, filename);
+							FILE* file = fopen(fullpath, "w");
+							if (file == NULL) {
+								EZN_WARN("Error while saving file occurred");
+							} else {
+								fwrite(data, sizeof(char), (size_t)numbytes, file);
+								fclose(file);
+								printf("    file transfer of %lu bytes complete and placed in %s\n", (unsigned long)numbytes, fullpath);
+							}
 						} else {
 							EZN_WARN("recieved incomplete header");
 						}
@@ -112,13 +143,10 @@ void input_handler(void* params) {
 				}
 			}
 			lock_rec = EZN_FALSE;
-			printf("> ");
 		} else if (strcmp(process_cmd, "uTake") == 0 && ftstate == DEFAULT) {
 			printf("  you did an utake command!\n");
-			printf("> ");
 		} else {
 			printf("  That just ain't right!\n");
-			printf("> ");
 		}
 		EZN_RELEASE_MUTEX(mutex);
     }
@@ -136,21 +164,43 @@ void net_handler(void* params) {
 				EZN_WARN("Error occured while asking for data");
 			} else {
 				if (retlen > 0 && retlen <= PACKETSIZE*2) {
-					#ifdef _WIN32
-					struct _stat64i32 info;
-					EZN_BOOL is_real = _stat(netbuffer + 2, &info) == 0;
-					#else
-					struct stat info;
-					EZN_BOOL is_real = stat(netbuffer + 2, &info) == 0;
-					#endif
-					netbuffer[0] = 'c';
-					netbuffer[1] = 'e';
-					if (is_real) {
-						netbuffer[2] = 'y';
-						if (ezn_send(connectedsocket, (EZN_BYTE*)netbuffer, 3, &retlen) == EZN_ERROR) EZN_WARN("Error occured while sending");
+					if (netbuffer[0] == 'a' && netbuffer[1] == 'e') {
+						#ifdef _WIN32
+						struct _stat64i32 info;
+						EZN_BOOL is_real = _stat(netbuffer + 2, &info) == 0;
+						#else
+						struct stat info;
+						EZN_BOOL is_real = stat(netbuffer + 2, &info) == 0;
+						#endif
+						netbuffer[0] = 'c';
+						netbuffer[1] = 'e';
+						if (is_real) {
+							netbuffer[2] = 'y';
+							if (ezn_send(connectedsocket, (EZN_BYTE*)netbuffer, 3, &retlen) == EZN_ERROR) EZN_WARN("Error occured while sending");
+						} else {
+							netbuffer[2] = 'n';
+							if (ezn_send(connectedsocket, (EZN_BYTE*)netbuffer, 3, &retlen) == EZN_ERROR) EZN_WARN("Error occured while sending");
+						}
+					} else if (netbuffer[0] == 'd') {
+						FILE* file;
+						file = fopen(netbuffer + 1, "rb");
+						uint64_t filesize;
+						if (file == NULL) {
+							EZN_WARN("Unable to open file");
+						} else {
+							fseek(file, 0, SEEK_END);
+							filesize = (uint64_t)ftell(file);
+							memcpy(netbuffer, &filesize, sizeof(uint64_t));
+							if (ezn_send(connectedsocket, (EZN_BYTE*)netbuffer, HEADERSIZE, &retlen) == EZN_ERROR) EZN_WARN("Error occured while sending");
+							fseek(file, 0, SEEK_SET);
+							for (uint64_t i = 0; i < filesize; i++) {
+								char byte = fgetc(file);
+								if (ezn_send(connectedsocket, (EZN_BYTE*)&byte, 1, &retlen) == EZN_ERROR) EZN_WARN("Error occured while sending byte");
+							}
+							fclose(file);
+						}
 					} else {
-						netbuffer[2] = 'n';
-						if (ezn_send(connectedsocket, (EZN_BYTE*)netbuffer, 3, &retlen) == EZN_ERROR) EZN_WARN("Error occured while sending");
+						EZN_WARN("Unknown packet request type recieved!");
 					}
 				}
 				memset(netbuffer, '\0', PACKETSIZE*2);
@@ -223,7 +273,7 @@ int main(int argc, char* argv[]) {
 			EZN_FATAL("Unable to open server");
 		}
 
-		status = ezn_server_queue(&server, server_behavior, EZN_ACCEPT_FOREVER, EZN_TRUE);
+		status = ezn_server_queue(&server, server_behavior, 1, EZN_TRUE);
 		if (status == EZN_NONE) {
 			EZN_INFO("Finished taking clients");
 		} else {
