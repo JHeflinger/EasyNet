@@ -94,11 +94,11 @@ void input_handler(void* params) {
 							get_filename(filename, file_to_handle + 1);
 							char fullpath[PACKETSIZE*2];
 							sprintf(fullpath, "%s/%s", input_buffer, filename);
-							FILE* file = fopen(fullpath, "w");
+							FILE* file = fopen(fullpath, "wb");
 							if (file == NULL) {
 								EZN_WARN("Error while saving file occurred");
 							} else {
-								fwrite(data, sizeof(char), (size_t)numbytes, file);
+								fwrite(downloaded, sizeof(char), (size_t)numbytes, file);
 								fclose(file);
 								printf("    file transfer of %lu bytes complete and placed in %s\n", (unsigned long)numbytes, fullpath);
 							}
