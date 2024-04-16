@@ -25,6 +25,7 @@ char output_buffer[PACKETSIZE];
 char input_buffer[PACKETSIZE];
 int input_ind = 0;
 EZN_BOOL shutdown_flag = EZN_FALSE;
+EZN_BOOL lock_rec = EZN_FALSE;
 char addr[MAX_IP_ADDR_LENGTH];
 FT_State ftstate = DEFAULT;
 
@@ -91,6 +92,8 @@ void input_handler(void* params) {
 				char out_cmd[PACKETSIZE];
 				memcpy(process_cmd, input_buffer, PACKETSIZE);
 				process_cmd[5] = '\0';
+				strcpy(output_buffer, "> ");
+				strapp(output_buffer, input_buffer);
 				if (strcmp(input_buffer, "exit") == 0) {
 					reset_prompt();
 					printf("Say byebye~ to the client!...\n");
@@ -98,20 +101,33 @@ void input_handler(void* params) {
 					EZN_RELEASE_MUTEX(mutex);
 					return;
 				} else if (ftstate == IWANTASKDIR) {
-
+					#ifdef _WIN32
+					struct _stat64i32 info;
+					EZN_BOOL is_real = _stat(input_buffer, &info) == 0;
+					#else
+					struct stat info;
+					EZN_BOOL is_real = stat(input_buffer, &info) == 0;
+					#endif
+					reset_prompt();
+					printf("prompt> ");
+					if (is_real) {
+						
+					} else {
+						strapp(output_buffer, "That location doesn't exist dummy!");
+					}
+					ftstate = DEFAULT;
 				} else if (ftstate == UTAKEASKDIR) {
 					
 				} else if (strcmp(process_cmd, "iWant") == 0 && ftstate == DEFAULT) {
+					lock_rec = EZN_TRUE;
 					memcpy(process_cmd + 2, input_buffer + 6, PACKETSIZE - 6);
 					process_cmd[input_ind + 2] = '\0';
 					process_cmd[0] = 'a';
 					process_cmd[1] = 'e';
-					strcpy(output_buffer, "> ");
-					strapp(output_buffer, input_buffer);
-					if (ezn_send(connectedsocket, (EZN_BYTE*)(process_cmd), strlen(process_cmd) + 1, &returnlen) == EZN_ERROR) {
+					if (ezn_send(connectedsocket, (EZN_BYTE*)process_cmd, strlen(process_cmd) + 1, &returnlen) == EZN_ERROR) {
 						EZN_WARN("send failed");
 					} else {
-						if (ezn_recieve(connectedsocket, out_cmd, 3, &returnlen) == EZN_ERROR) {
+						if (ezn_recieve(connectedsocket, (EZN_BYTE*)out_cmd, 3, &returnlen) == EZN_ERROR) {
 							EZN_WARN("receive failed");
 						} else {
 							if (out_cmd[0] == 'c' && out_cmd[1] == 'e') {
@@ -128,6 +144,7 @@ void input_handler(void* params) {
 							}
 						}
 					}
+					lock_rec = EZN_FALSE;
 					reset_prompt();
 					printf("prompt> ");
 				} else if (strcmp(process_cmd, "uTake") == 0 && ftstate == DEFAULT) {
@@ -151,7 +168,6 @@ void input_handler(void* params) {
 }
 
 void output_handler(void* params) {
-	EZN_SOCKET connectedsocket = ((Handler_args*)params)->socket_arg;
     memset(output_buffer, '\0', PACKETSIZE);
 
 	while (EZN_TRUE) {
@@ -178,33 +194,35 @@ void net_handler(void* params) {
 	size_t retlen;
 	while (EZN_TRUE) {
 		if (shutdown_flag == EZN_TRUE) return;
-		if (ezn_ask(connectedsocket, netbuffer, PACKETSIZE*2, &retlen) == EZN_ERROR) {
-			EZN_WARN("Error occured while asking for data");
-		} else {
-			if (retlen > 0 && retlen <= PACKETSIZE*2) {
-				#ifdef _WIN32
-				struct _stat64i32 info;
-				EZN_BOOL is_directory = _stat(netbuffer + 2, &info) == 0;
-				#else
-				struct stat info;
-				EZN_BOOL is_directory = stat(netbuffer + 2, &info) == 0;
-				#endif
-				netbuffer[0] = 'c';
-				netbuffer[1] = 'e';
-				if (is_directory) {
-					netbuffer[2] = 'y';
-					if (ezn_send(connectedsocket, netbuffer, 3, &retlen) == EZN_ERROR) EZN_WARN("Error occured while sending");
-				} else {
-					netbuffer[2] = 'n';
-					if (ezn_send(connectedsocket, netbuffer, 3, &retlen) == EZN_ERROR) EZN_WARN("Error occured while sending");
+		if (lock_rec == EZN_FALSE) {
+			if (ezn_ask(connectedsocket, (EZN_BYTE*)netbuffer, PACKETSIZE*2, &retlen) == EZN_ERROR) {
+				EZN_WARN("Error occured while asking for data");
+			} else {
+				if (retlen > 0 && retlen <= PACKETSIZE*2) {
+					#ifdef _WIN32
+					struct _stat64i32 info;
+					EZN_BOOL is_real = _stat(netbuffer + 2, &info) == 0;
+					#else
+					struct stat info;
+					EZN_BOOL is_real = stat(netbuffer + 2, &info) == 0;
+					#endif
+					netbuffer[0] = 'c';
+					netbuffer[1] = 'e';
+					if (is_real) {
+						netbuffer[2] = 'y';
+						if (ezn_send(connectedsocket, (EZN_BYTE*)netbuffer, 3, &retlen) == EZN_ERROR) EZN_WARN("Error occured while sending");
+					} else {
+						netbuffer[2] = 'n';
+						if (ezn_send(connectedsocket, (EZN_BYTE*)netbuffer, 3, &retlen) == EZN_ERROR) EZN_WARN("Error occured while sending");
+					}
 				}
+				memset(netbuffer, '\0', PACKETSIZE*2);
 			}
-			memset(netbuffer, '\0', PACKETSIZE*2);
 		}
 	}
 }
 
-EZN_STATUS my_behavior(ezn_Client* client, EZN_SOCKET connectedsocket) {
+EZN_STATUS my_behavior(EZN_SOCKET connectedsocket) {
 	printf("Connection established, now waiting for user input...\n");
 
 	Handler_args inargs;
@@ -232,6 +250,13 @@ EZN_STATUS my_behavior(ezn_Client* client, EZN_SOCKET connectedsocket) {
 	return EZN_NONE;
 }
 
+EZN_STATUS server_behavior(ezn_Server* server, EZN_SOCKET connectedsocket) {
+	return my_behavior(connectedsocket);
+}
+
+EZN_STATUS client_behavior(ezn_Client* client, EZN_SOCKET connectedsocket) {
+	return my_behavior(connectedsocket);
+}
 
 int main(int argc, char* argv[]) {
 	if (argc == 2) {
@@ -267,7 +292,7 @@ int main(int argc, char* argv[]) {
 			EZN_FATAL("Unable to open server");
 		}
 
-		status = ezn_server_queue(&server, my_behavior, EZN_ACCEPT_FOREVER, EZN_TRUE);
+		status = ezn_server_queue(&server, server_behavior, EZN_ACCEPT_FOREVER, EZN_TRUE);
 		if (status == EZN_NONE) {
 			EZN_INFO("Finished taking clients");
 		} else {
@@ -316,7 +341,7 @@ int main(int argc, char* argv[]) {
 			EZN_FATAL("An error occurred while configuring the client");
 		}
 
-		status = ezn_connect_client(&client, my_behavior);
+		status = ezn_connect_client(&client, client_behavior);
 		if (status == EZN_NONE) {
 			//EZN_INFO("Finished talking to server!");
 			printf("Attempting to shut down client sockets and other streams\n\n");
