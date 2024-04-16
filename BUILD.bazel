@@ -36,3 +36,32 @@ cc_binary(
 	]
 )
 
+cc_binary(
+	name = "fileserver",
+	srcs = ["src/fileserver.c"],
+	deps = [":easynet"]
+)
+
+cc_binary(
+	name = "fileclient",
+	srcs = ["src/fileclient.c"],
+	deps = [":easynet"]
+)
+
+cc_binary(
+	name = "win_fileserver",
+	srcs = ["src/fileserver.c"],
+	deps = [":easynet"],
+	linkopts = [
+		"-DEFAULTLIB:ws2_32.lib",
+	]
+)
+
+cc_binary(
+	name = "win_fileclient",
+	srcs = ["src/fileclient.c"],
+	deps = [":easynet"],
+	linkopts = [
+		"-DEFAULTLIB:ws2_32.lib",
+	]
+)
