@@ -9,6 +9,7 @@
 #endif
 
 #define PACKETSIZE 4096
+#define HEADERSIZE 8
 
 typedef enum {
 	DEFAULT,
@@ -23,168 +24,104 @@ typedef struct {
 EZN_MUTEX mutex;
 char output_buffer[PACKETSIZE];
 char input_buffer[PACKETSIZE];
-int input_ind = 0;
 EZN_BOOL shutdown_flag = EZN_FALSE;
 EZN_BOOL lock_rec = EZN_FALSE;
 char addr[MAX_IP_ADDR_LENGTH];
 FT_State ftstate = DEFAULT;
 
-void strapp(char* str, char* nextstr) {
-	strcpy(str + strlen(str), nextstr);
-}
-
-void reset_prompt() {
-	int ind = -8;
-	while ((ind < 0 || input_buffer[ind] != '\0') && ind < PACKETSIZE) {
-		printf("%s", "\b \b");
-		ind++;
-	}
-	input_buffer[0] = '\0';
-	input_ind = 0;
-}
-
-#ifdef __linux__
-int _kbhit(void) {
-	struct termios oldt, newt;
-	int ch;
-	int oldf;
-	tcgetattr(STDIN_FILENO, &oldt);
-	newt = oldt;
-	newt.c_lflag &= ~(ICANON | ECHO);
-	tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-	oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
-	fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
-	ch = getchar();
-	tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
-	fcntl(STDIN_FILENO, F_SETFL, oldf);
-	if(ch != EOF) {
-		ungetc(ch, stdin);
-		return 1;
-	}
- 	return 0;
-}
-#endif
-
 void input_handler(void* params) {
 	EZN_SOCKET connectedsocket = ((Handler_args*)params)->socket_arg;
 	size_t returnlen;
 	EZN_LOCK_MUTEX(mutex);
-	reset_prompt();
-	printf("\nprompt> ");
+	printf("> ");
 	EZN_RELEASE_MUTEX(mutex);
+	char file_to_handle[PACKETSIZE];
 	while (EZN_TRUE) {
 		if (shutdown_flag == EZN_TRUE) return;
-		if (_kbhit()) {
-		#ifdef __linux__
-            char ch = getchar();
-		#elif _WIN32
-			char ch = _getch();
-		#endif
-			EZN_LOCK_MUTEX(mutex);
-			if (ch == '\b' || ch == 127) {
-				if (input_ind > 0) {
-					input_ind--;
-                    input_buffer[input_ind] = '\0';
-					printf("%s", "\b \b");
-				}
-			} else if (ch == '\n' || ch == '\r') {
-				char process_cmd[PACKETSIZE*2];
-				char out_cmd[PACKETSIZE];
-				memcpy(process_cmd, input_buffer, PACKETSIZE);
-				process_cmd[5] = '\0';
-				strcpy(output_buffer, "> ");
-				strapp(output_buffer, input_buffer);
-				if (strcmp(input_buffer, "exit") == 0) {
-					reset_prompt();
-					printf("Say byebye~ to the client!...\n");
-					shutdown_flag = EZN_TRUE;
-					EZN_RELEASE_MUTEX(mutex);
-					return;
-				} else if (ftstate == IWANTASKDIR) {
-					#ifdef _WIN32
-					struct _stat64i32 info;
-					EZN_BOOL is_real = _stat(input_buffer, &info) == 0;
-					#else
-					struct stat info;
-					EZN_BOOL is_real = stat(input_buffer, &info) == 0;
-					#endif
-					reset_prompt();
-					printf("prompt> ");
-					if (is_real) {
-						
+		scanf("%[^\n]%*c", input_buffer);
+		EZN_LOCK_MUTEX(mutex);
+		char process_cmd[PACKETSIZE*2];
+		char out_cmd[PACKETSIZE];
+		memcpy(process_cmd, input_buffer, PACKETSIZE);
+		process_cmd[5] = '\0';
+		if (strcmp(input_buffer, "exit") == 0) {
+			printf("Say byebye~ to the client!...\n");
+			shutdown_flag = EZN_TRUE;
+			EZN_RELEASE_MUTEX(mutex);
+			return;
+		} else if (ftstate == IWANTASKDIR) {
+			#ifdef _WIN32
+			struct _stat64i32 info;
+			EZN_BOOL is_real = _stat(input_buffer, &info) == 0;
+			#else
+			struct stat info;
+			EZN_BOOL is_real = stat(input_buffer, &info) == 0;
+			#endif
+			printf("> ");
+			if (is_real) {
+				lock_rec = EZN_TRUE;
+				if (ezn_send(connectedsocket, (EZN_BYTE*)file_to_handle, strlen(file_to_handle) + 1, &returnlen) == EZN_ERROR) {
+					EZN_WARN("request for file failed to send");
+				} else {
+					char header[HEADERSIZE];
+					if (ezn_recieve(connectedsocket, (EZN_BYTE*)header, HEADERSIZE, &returnlen) == EZN_ERROR) {
+						EZN_WARN("unable to recieve header");
 					} else {
-						strapp(output_buffer, "That location doesn't exist dummy!");
-					}
-					ftstate = DEFAULT;
-				} else if (ftstate == UTAKEASKDIR) {
-					
-				} else if (strcmp(process_cmd, "iWant") == 0 && ftstate == DEFAULT) {
-					lock_rec = EZN_TRUE;
-					memcpy(process_cmd + 2, input_buffer + 6, PACKETSIZE - 6);
-					process_cmd[input_ind + 2] = '\0';
-					process_cmd[0] = 'a';
-					process_cmd[1] = 'e';
-					if (ezn_send(connectedsocket, (EZN_BYTE*)process_cmd, strlen(process_cmd) + 1, &returnlen) == EZN_ERROR) {
-						EZN_WARN("send failed");
-					} else {
-						if (ezn_recieve(connectedsocket, (EZN_BYTE*)out_cmd, 3, &returnlen) == EZN_ERROR) {
-							EZN_WARN("receive failed");
+						if (returnlen > 0 && returnlen < PACKETSIZE) {
+							uint64_t numbytes;
+							memcpy(&numbytes, header, sizeof(uint64_t));
+							EZN_INFO("TODO: btw ready to recieve %d bytes", (int)numbytes);
 						} else {
-							if (out_cmd[0] == 'c' && out_cmd[1] == 'e') {
-								if (out_cmd[2] == 'y') {
-									strapp(output_buffer, "\n  What directory would you like to save this file?");
-									ftstate = IWANTASKDIR;
-								} else if (out_cmd[2] == 'n') {
-									strapp(output_buffer, "\n  What you talkin' bout Willis? I ain't seen that file anywhere!");
-								} else {
-									EZN_WARN("Invalid response");
-								}
-							} else {
-								EZN_WARN("Invalid response");
-							}
+							EZN_WARN("recieved incomplete header");
 						}
 					}
-					lock_rec = EZN_FALSE;
-					reset_prompt();
-					printf("prompt> ");
-				} else if (strcmp(process_cmd, "uTake") == 0 && ftstate == DEFAULT) {
-					strapp(output_buffer, "\n  you did an utake command!");
-					reset_prompt();
-					printf("prompt> ");
-				} else {
-					strapp(output_buffer, "\n  That just ain't right!");
-					reset_prompt();
-					printf("prompt> ");
 				}
+				lock_rec = EZN_FALSE;
 			} else {
-				input_buffer[input_ind] = ch;
-				input_ind++;
-                input_buffer[input_ind] = '\0';
-				printf("%c", ch);
+				printf("That location doesn't exist dummy!\n");
 			}
-			EZN_RELEASE_MUTEX(mutex);
-        }
-    }
-}
-
-void output_handler(void* params) {
-    memset(output_buffer, '\0', PACKETSIZE);
-
-	while (EZN_TRUE) {
-		if (shutdown_flag == EZN_TRUE) return;
-        EZN_LOCK_MUTEX(mutex);
-        if (output_buffer[0] != '\0') {
-	        int ind = -8;
-	        while ((ind < 0 || input_buffer[ind] != '\0') && ind < PACKETSIZE) {
-		        printf("%s", "\b \b");
-		        ind++;
-	        }
-            printf("%s\n", output_buffer);
-            printf("prompt> %s", input_buffer);
-			memset(output_buffer, '\0', PACKETSIZE);
-        }
+			ftstate = DEFAULT;
+		} else if (ftstate == UTAKEASKDIR) {
+					
+		} else if (strcmp(process_cmd, "iWant") == 0 && ftstate == DEFAULT) {
+			lock_rec = EZN_TRUE;
+			memcpy(process_cmd + 2, input_buffer + 6, PACKETSIZE - 6);
+			process_cmd[strlen(input_buffer) + 2] = '\0';
+			process_cmd[0] = 'a';
+			process_cmd[1] = 'e';
+			if (ezn_send(connectedsocket, (EZN_BYTE*)process_cmd, strlen(process_cmd) + 1, &returnlen) == EZN_ERROR) {
+				EZN_WARN("send failed");
+			} else {
+				if (ezn_recieve(connectedsocket, (EZN_BYTE*)out_cmd, 3, &returnlen) == EZN_ERROR) {
+					EZN_WARN("receive failed");
+				} else {
+					if (out_cmd[0] == 'c' && out_cmd[1] == 'e') {
+						if (out_cmd[2] == 'y') {
+							strcpy(file_to_handle + 1, process_cmd + 2);
+							file_to_handle[0] = 'd';
+							printf("  What directory would you like to save this file?\n");
+							ftstate = IWANTASKDIR;
+						} else if (out_cmd[2] == 'n') {
+							printf("  What you talkin' bout Willis? I ain't seen that file anywhere!\n");
+						} else {
+							EZN_WARN("Invalid response");
+						}
+					} else {
+						EZN_WARN("Invalid response");
+					}
+				}
+			}
+			lock_rec = EZN_FALSE;
+			printf("> ");
+		} else if (strcmp(process_cmd, "uTake") == 0 && ftstate == DEFAULT) {
+			printf("  you did an utake command!\n");
+			printf("> ");
+		} else {
+			printf("  That just ain't right!\n");
+			printf("> ");
+		}
 		EZN_RELEASE_MUTEX(mutex);
-	}
+    }
 }
 
 void net_handler(void* params) {
@@ -226,24 +163,18 @@ EZN_STATUS my_behavior(EZN_SOCKET connectedsocket) {
 	printf("Connection established, now waiting for user input...\n");
 
 	Handler_args inargs;
-	Handler_args outargs;
 	Handler_args netargs;
 	inargs.socket_arg = connectedsocket;
-	outargs.socket_arg = connectedsocket;
 	netargs.socket_arg = connectedsocket;
 
 	EZN_CREATE_MUTEX(mutex);
 
-	EZN_THREAD output_handler_thread;
 	EZN_THREAD input_handler_thread;
 	EZN_THREAD net_handler_thread;
-	EZN_CREATE_THREAD(output_handler_thread, output_handler, &outargs);
 	EZN_CREATE_THREAD(input_handler_thread, input_handler, &inargs);
 	EZN_CREATE_THREAD(net_handler_thread, net_handler, &netargs);
-	EZN_WAIT_THREAD(output_handler_thread);
 	EZN_WAIT_THREAD(input_handler_thread);
 	EZN_WAIT_THREAD(net_handler_thread);
-	EZN_CLOSE_THREAD(output_handler_thread);
 	EZN_CLOSE_THREAD(input_handler_thread);
 	EZN_CLOSE_THREAD(net_handler_thread);
 
