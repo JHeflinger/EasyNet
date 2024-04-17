@@ -11,12 +11,6 @@
 #define PACKETSIZE 4096
 #define HEADERSIZE 8
 
-typedef enum {
-	DEFAULT,
-	IWANTASKDIR,
-	UTAKEASKDIR,
-} FT_State;
-
 typedef struct {
 	EZN_SOCKET socket_arg;
 } Handler_args;
@@ -27,7 +21,6 @@ char input_buffer[PACKETSIZE];
 EZN_BOOL shutdown_flag = EZN_FALSE;
 EZN_BOOL lock_rec = EZN_FALSE;
 char addr[MAX_IP_ADDR_LENGTH];
-FT_State ftstate = DEFAULT;
 
 void get_filename(char* filename, char* filepath) {
 	size_t start = 0;
@@ -63,7 +56,36 @@ void input_handler(void* params) {
 			shutdown_flag = EZN_TRUE;
 			EZN_RELEASE_MUTEX(mutex);
 			return;
-		} else if (ftstate == IWANTASKDIR) {
+		} else if (strcmp(process_cmd, "iWant") == 0) {
+			lock_rec = EZN_TRUE;
+			memcpy(process_cmd + 2, input_buffer + 6, PACKETSIZE - 6);
+			process_cmd[strlen(input_buffer) + 2] = '\0';
+			process_cmd[0] = 'a';
+			process_cmd[1] = 'e';
+			if (ezn_send(connectedsocket, (EZN_BYTE*)process_cmd, strlen(process_cmd) + 1, &returnlen) == EZN_ERROR) {
+				EZN_WARN("send failed");
+			} else {
+				if (ezn_recieve(connectedsocket, (EZN_BYTE*)out_cmd, 3, &returnlen) == EZN_ERROR) {
+					EZN_WARN("receive failed");
+				} else {
+					if (out_cmd[0] == 'c' && out_cmd[1] == 'e') {
+						if (out_cmd[2] == 'y') {
+							strcpy(file_to_handle + 1, process_cmd + 2);
+							file_to_handle[0] = 'd';
+							printf("  What directory would you like to save this file?\n");
+						} else if (out_cmd[2] == 'n') {
+							printf("  What you talkin' bout Willis? I ain't seen that file anywhere!\n");
+						} else {
+							EZN_WARN("Invalid response");
+						}
+					} else {
+						EZN_WARN("Invalid response");
+					}
+				}
+			}
+			lock_rec = EZN_FALSE;
+			printf("> ");
+			scanf("%[^\n]%*c", input_buffer);
 			#ifdef _WIN32
 			struct _stat64i32 info;
 			EZN_BOOL is_real = _stat(input_buffer, &info) == 0;
@@ -111,40 +133,68 @@ void input_handler(void* params) {
 			} else {
 				printf("That location doesn't exist dummy!\n");
 			}
-			ftstate = DEFAULT;
-		} else if (ftstate == UTAKEASKDIR) {
-					
-		} else if (strcmp(process_cmd, "iWant") == 0 && ftstate == DEFAULT) {
+		} else if (strcmp(process_cmd, "uTake") == 0) {
 			lock_rec = EZN_TRUE;
-			memcpy(process_cmd + 2, input_buffer + 6, PACKETSIZE - 6);
-			process_cmd[strlen(input_buffer) + 2] = '\0';
-			process_cmd[0] = 'a';
-			process_cmd[1] = 'e';
-			if (ezn_send(connectedsocket, (EZN_BYTE*)process_cmd, strlen(process_cmd) + 1, &returnlen) == EZN_ERROR) {
-				EZN_WARN("send failed");
-			} else {
-				if (ezn_recieve(connectedsocket, (EZN_BYTE*)out_cmd, 3, &returnlen) == EZN_ERROR) {
-					EZN_WARN("receive failed");
+			strcpy(process_cmd, input_buffer + 6);
+			#ifdef _WIN32
+			struct _stat64i32 info;
+			EZN_BOOL is_real = _stat(process_cmd, &info) == 0;
+			#else
+			struct stat info;
+			EZN_BOOL is_real = stat(process_cmd, &info) == 0;
+			#endif
+			if (is_real) {
+				printf("What directory on the server would you like to save this file?\n> ");
+				scanf("%[^\n]%*c", input_buffer);
+				char askexistpacket[PACKETSIZE];
+				strcpy(askexistpacket + 2, input_buffer);
+				askexistpacket[0] = 'a';
+				askexistpacket[1] = 'e';
+				char confirmation[3];
+				if (ezn_send(connectedsocket, (EZN_BYTE*)askexistpacket, strlen(askexistpacket) + 1, &returnlen) == EZN_ERROR) {
+					EZN_WARN("Unable to send directory exist request!");
+				} else if (ezn_recieve(connectedsocket, (EZN_BYTE*)confirmation, 3, &returnlen) == EZN_ERROR) {
+					EZN_WARN("Unable to recieve directory exist reply!");
 				} else {
-					if (out_cmd[0] == 'c' && out_cmd[1] == 'e') {
-						if (out_cmd[2] == 'y') {
-							strcpy(file_to_handle + 1, process_cmd + 2);
-							file_to_handle[0] = 'd';
-							printf("  What directory would you like to save this file?\n");
-							ftstate = IWANTASKDIR;
-						} else if (out_cmd[2] == 'n') {
-							printf("  What you talkin' bout Willis? I ain't seen that file anywhere!\n");
+					is_real = confirmation[2] == 'y';
+					if (is_real) {
+						printf("    file transfer started...\n");
+						FILE* file;
+						file = fopen(process_cmd, "rb");
+						uint64_t filesize;
+						if (file == NULL) {
+							EZN_WARN("Unable to open file");
 						} else {
-							EZN_WARN("Invalid response");
+							fseek(file, 0, SEEK_END);
+							filesize = (uint64_t)ftell(file);
+							fclose(file);
+							char headerbuffer[3];
+							memcpy(headerbuffer + 1, &filesize, sizeof(uint64_t));
+							headerbuffer[0] = 'u';
+							if (ezn_send(connectedsocket, (EZN_BYTE*)headerbuffer, sizeof(uint64_t) + 1, &returnlen) == EZN_ERROR) {
+								EZN_WARN("Unable to send upload request!");
+							} else {
+								file = fopen(process_cmd, "rb");
+								fseek(file, 0, SEEK_SET);
+								for (uint64_t i = 0; i < filesize; i++) {
+									char byte = fgetc(file);
+									if (ezn_send(connectedsocket, (EZN_BYTE*)&byte, 1, &returnlen) == EZN_ERROR) EZN_WARN("Error occured while sending byte");
+								}
+								char filename[PACKETSIZE*2];
+								sprintf(filename, "%s/%s", input_buffer, process_cmd);
+								if (ezn_send(connectedsocket, (EZN_BYTE*)filename, PACKETSIZE*2, &returnlen)) EZN_WARN("Error occured while sending name");
+								fclose(file);
+								printf("    file transfer of %lu bytes to server complete and placed in %s\n", (unsigned long)filesize, input_buffer);
+							}
 						}
 					} else {
-						EZN_WARN("Invalid response");
+						printf("That location doesn't exist dummy!\n");
 					}
 				}
+			} else {
+				printf("  What you talkin' bout Willis? I ain't seen that file anywhere!\n");
 			}
 			lock_rec = EZN_FALSE;
-		} else if (strcmp(process_cmd, "uTake") == 0 && ftstate == DEFAULT) {
-			printf("  you did an utake command!\n");
 		} else {
 			printf("  That just ain't right!\n");
 		}
@@ -199,8 +249,29 @@ void net_handler(void* params) {
 							}
 							fclose(file);
 						}
+					} else if (netbuffer[0] == 'u') {
+						uint64_t filesize;
+						memcpy(&filesize, netbuffer + 1, sizeof(uint64_t));
+						char* uploaded = calloc((size_t)filesize, sizeof(char));
+						char filename[PACKETSIZE*2];
+						for (uint64_t i = 0; i < filesize; i++) {
+							if (ezn_recieve(connectedsocket, (EZN_BYTE*)uploaded + i, 1, &retlen) == EZN_ERROR) {
+								EZN_WARN("Error while recieving byte");
+							}
+						}
+						if (ezn_recieve(connectedsocket, (EZN_BYTE*)filename, PACKETSIZE*2, &retlen) == EZN_ERROR) {
+							EZN_WARN("cant get the filename!")
+						} else {
+							FILE* file = fopen(filename, "wb");
+							if (file == NULL) {
+								EZN_WARN("Couldnt open file");
+							} else {
+								fwrite(uploaded, sizeof(char), filesize, file);
+								fclose(file);
+							}
+						}
 					} else {
-						EZN_WARN("Unknown packet request type recieved!");
+						EZN_WARN("Unknown packet request type recieved: %s", netbuffer);
 					}
 				}
 				memset(netbuffer, '\0', PACKETSIZE*2);
