@@ -214,7 +214,6 @@ void net_handler(void* params) {
 				EZN_WARN("Error occured while asking for data");
 			} else {
 				if (retlen > 0 && retlen <= PACKETSIZE*2) {
-					EZN_INFO("received message %s", netbuffer);
 					if (netbuffer[0] == 'a' && netbuffer[1] == 'e') {
 						#ifdef _WIN32
 						struct _stat64i32 info;
@@ -251,7 +250,6 @@ void net_handler(void* params) {
 							fclose(file);
 						}
 					} else if (netbuffer[0] == 'u') {
-						EZN_INFO("hey doing this!");
 						uint64_t filesize;
 						memcpy(&filesize, netbuffer + 1, sizeof(uint64_t));
 						char* uploaded = calloc((size_t)filesize, sizeof(char));
