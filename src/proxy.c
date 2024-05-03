@@ -2,10 +2,38 @@
 
 #define REQUEST_SIZE 4096
 #define DEFAULT_HTTP_PORT 80
+#define TIMEOUT 10000
+
+#ifdef _WIN32
+#include <Windows.h>
+#elif __linux__
+#include <time.h>
+#else
+#error "Unsupported operating system detected!"
+#endif
 
 EZN_MUTEX g_Mutex;
 uint16_t g_Port;
 ezn_Server g_Server;
+
+#ifdef _WIN32
+uint32_t get_unprecise_epoch() {
+    FILETIME ft;
+    ULONGLONG epoch_time_ms;
+    GetSystemTimePreciseAsFileTime(&ft);
+    epoch_time_ms = ((ULONGLONG)ft.dwHighDateTime << 32 | ft.dwLowDateTime) / 10000ULL;
+    return epoch_time_ms - 0xffffffff;
+}
+#elif __linux__
+uint32_t get_unprecise_epoch() {
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+    uint64_t epoch_time_ms = (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+	return epoch_time_ms - 0xffffffff;
+}
+#else
+#error "Unknown operating system!"
+#endif
 
 void proxy(void* args) {
 	EZN_SOCKET* connectionptr = (EZN_SOCKET*)args;
@@ -86,6 +114,28 @@ void proxy(void* args) {
 				if (error_code == 0) {
 					char redir_msg[REQUEST_SIZE*3];
 					sprintf(redir_msg, "GET /%s %s\nHost: %s\nConnection: close\n", path, PROXY_VERSION, hostname);
+					ezn_Client proxy_client = { 0 };
+					proxy_client.unsafe_port_allowed = EZN_TRUE;
+					if (ezn_configure_client(&proxy_client, url_port, url_ip) == EZN_ERROR) {
+						error_code = 500;
+					} else if (ezn_bind_client(&proxy_client) == EZN_ERROR) {
+						error_code = 500;
+					} else {
+						size_t success_sent;
+						if (ezn_send(proxy_client.socket, (EZN_BYTE*)redir_msg, strlen(redir_msg), &success_sent) == EZN_ERROR) error_code = 500;
+						else if (success_sent != strlen(redir_msg)) error_code = 500;
+						else {
+							uint32_t rectime_start = get_unprecise_epoch();	
+							while (EZN_TRUE) {
+								
+								if (get_unprecise_epoch() - rectime_start > TIMEOUT) {
+									error_code = 505;
+									break;
+								}
+							}
+						}
+						ezn_disconnect_client(&proxy_client);
+					}
 					printf("%s", redir_msg);
 				}
 				EZN_INFO("error code: %d", error_code);

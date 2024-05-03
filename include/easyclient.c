@@ -5,7 +5,7 @@ static ezn_SocketList* s_open_clients_head;
 EZN_STATUS ezn_configure_client(ezn_Client* client, uint16_t port, uint8_t* address) {
 	EZN_SAFECHECK();
 	client->status = EZN_CLIENT_DISCONNECTED;
-	if (port < MIN_PORT || port > MAX_PORT) {
+	if ((port < MIN_PORT || port > MAX_PORT) && client->unsafe_port_allowed == EZN_FALSE) {
 		EZN_WARN("Invalid port detected. Please use a value between %d to %d", MIN_PORT, MAX_PORT);
 		return EZN_ERROR;
 	}
@@ -15,13 +15,13 @@ EZN_STATUS ezn_configure_client(ezn_Client* client, uint16_t port, uint8_t* addr
 	return EZN_NONE;
 }
 
-EZN_STATUS ezn_connect_client(ezn_Client* client, ezn_ClientBehavior behavior) {
+EZN_STATUS ezn_bind_client(ezn_Client* client) {
 	EZN_SAFECHECK();
 	if (client->status != EZN_CLIENT_DISCONNECTED) {
 		EZN_WARN("Unable to connect a client that is already connected");
 		return EZN_ERROR;
 	}
-	if (client->port < MIN_PORT || client->port > MAX_PORT) {
+	if ((client->port < MIN_PORT || client->port > MAX_PORT) && client->unsafe_port_allowed == EZN_FALSE) {
 		EZN_WARN("Unable to connect client with an invalid port. Please use a value between %d to %d", MIN_PORT, MAX_PORT);
 		return EZN_ERROR;
 	}
@@ -65,6 +65,12 @@ EZN_STATUS ezn_connect_client(ezn_Client* client, ezn_ClientBehavior behavior) {
 		next_open_socket->next = s_open_clients_head;
 		s_open_clients_head = next_open_socket;
 	}
+
+	return EZN_NONE; 
+}
+
+EZN_STATUS ezn_connect_client(ezn_Client* client, ezn_ClientBehavior behavior) {
+	if (ezn_bind_client(client) == EZN_ERROR) return EZN_ERROR;
 
 	EZN_STATUS behavior_result = behavior(client, client->socket);
 	if (behavior_result == EZN_ERROR) {
