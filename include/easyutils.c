@@ -1,4 +1,5 @@
 #include "easyutils.h"
+#include "netbasic.h"
 
 EZN_STATUS ezn_set_ipv4_addr(uint8_t* address, uint8_t first, uint8_t second, uint8_t third, uint8_t fourth) {
 	address[0] = first;
@@ -59,4 +60,12 @@ EZN_STATUS ezn_str_to_port(uint16_t* port, char* str) {
 	if (inter > MAX_PORT) return EZN_ERROR;
 	*port = inter;
 	return EZN_NONE;
+}
+
+EZN_STATUS ezn_hostname_to_ip(char* hostname, uint8_t* address) {
+	struct hostent* hostentry = gethostbyname(hostname);
+	if (hostentry == NULL) return EZN_ERROR;
+	char straddr[MAX_IP_ADDR_LENGTH];
+	strcpy(straddr, inet_ntoa(*((struct in_addr*)hostentry->h_addr_list[0])));
+	return ezn_str_to_ipaddr(address, straddr);
 }
