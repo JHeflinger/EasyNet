@@ -39,10 +39,12 @@ void proxy(void* args) {
 	EZN_SOCKET* connectionptr = (EZN_SOCKET*)args;
 	EZN_SOCKET connection = *connectionptr;
 	char request[REQUEST_SIZE];
-	int request_coordinates[3]; // 0 is the method, 1 is the url, and 2 is the version
+	int request_coordinates[4];
 	#define PROXY_METHOD (request + request_coordinates[0])
 	#define PROXY_URL (request + request_coordinates[1])
 	#define PROXY_VERSION (request + request_coordinates[2])
+	#define REMAINING_HEADERS (request + request_coordinates[3])
+	EZN_BOOL additional_headers = EZN_FALSE;
 	size_t returnlen;
 	int status;
 
@@ -67,9 +69,18 @@ void proxy(void* args) {
 				request[parse_ind] = '\0';
 				request_coordinates[packtrack] = parse_ind + 1;
 			}
+			if (request[parse_ind] == '\n' || request[parse_ind] == '\r') {
+				request[parse_ind] = '\0';
+				parse_ind++;
+				while (request[parse_ind] == '\n' || request[parse_ind] == '\r') parse_ind++;
+				packtrack++;
+				request_coordinates[packtrack] = parse_ind;
+				additional_headers = EZN_TRUE;
+				break;
+			}
 			parse_ind++;
 		}
-		if (packtrack != 2) error_code = 400;
+		if (packtrack < 2) error_code = 400;
 		if (error_code == 0) {
 			if (strcmp(PROXY_METHOD, "GET") == 0) {
 				uint16_t url_port;
@@ -113,7 +124,44 @@ void proxy(void* args) {
 				if (ezn_hostname_to_ip(hostname, url_ip) == EZN_ERROR) error_code = 404;
 				if (error_code == 0) {
 					char redir_msg[REQUEST_SIZE*3];
-					sprintf(redir_msg, "GET /%s %s\nHost: %s\nConnection: close\n", path, PROXY_VERSION, hostname);
+					if (additional_headers == EZN_FALSE) {
+						sprintf(redir_msg, "GET /%s %s\r\nHost: %s\r\nConnection: close\r\n\r\n", path, PROXY_VERSION, hostname);
+					} else {
+						char headers[REQUEST_SIZE];
+						strcpy(headers, REMAINING_HEADERS);
+						int ind = 0;
+						while(headers[ind] != '\0') {
+							if (headers[ind] == '\r' || headers[ind] == '\n' || ind == 0) {
+								while (headers[ind] == '\r' || headers[ind] == '\n') ind++;
+								if (strlen(headers + ind) > 4) {
+									if (memcmp("Host:", headers + ind, strlen("Host:") - 1) == 0) {
+										int end_ind = ind;
+										while (headers[end_ind] != '\0' && headers[end_ind] != '\n' && headers[end_ind] != '\r') end_ind++;
+										while (headers[end_ind] == '\r' || headers[end_ind] == '\n') end_ind++;
+										char inter_buffer[REQUEST_SIZE];
+										strcpy(inter_buffer, headers + end_ind);
+										strcpy(headers + ind, inter_buffer);
+										ind = 0;
+										continue;
+									}
+								}
+								if (strlen(headers + ind) > 10) {
+									if (memcmp("Connection:", headers + ind, strlen("Connection:") - 1) == 0) {
+										int end_ind = ind;
+										while (headers[end_ind] != '\0' && headers[end_ind] != '\n' && headers[end_ind] != '\r') end_ind++;
+										while (headers[end_ind] == '\r' || headers[end_ind] == '\n') end_ind++;
+										char inter_buffer[REQUEST_SIZE];
+										strcpy(inter_buffer, headers + end_ind);
+										strcpy(headers + ind, inter_buffer);
+										ind = 0;
+										continue;
+									}
+								}
+							}
+							ind++;
+						}
+						sprintf(redir_msg, "GET /%s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n%s\n", path, hostname, headers);
+					}
 					ezn_Client proxy_client = { 0 };
 					proxy_client.unsafe_port_allowed = EZN_TRUE;
 					if (ezn_configure_client(&proxy_client, url_port, url_ip) == EZN_ERROR) {
@@ -125,34 +173,56 @@ void proxy(void* args) {
 						if (ezn_send(proxy_client.socket, (EZN_BYTE*)redir_msg, strlen(redir_msg), &success_sent) == EZN_ERROR) error_code = 500;
 						else if (success_sent != strlen(redir_msg)) error_code = 500;
 						else {
+							EZN_BYTE curr_byte;
 							uint32_t rectime_start = get_unprecise_epoch();	
+							size_t success_rec;
 							while (EZN_TRUE) {
-								
+								if (ezn_ask(proxy_client.socket, &curr_byte, 1, &success_rec) == EZN_ERROR) {
+									error_code = 500;
+									break;
+								} else {
+									if (success_rec == 1) {
+										if (ezn_send(connection, &curr_byte, 1, &success_sent) == EZN_ERROR) {
+											error_code = 500;
+											break;
+										}
+										while (success_rec == 1) {
+											if (ezn_ask(proxy_client.socket, &curr_byte, 1, &success_rec) == EZN_ERROR) {
+												error_code = 500;
+												break;
+											}
+											if (ezn_send(connection, &curr_byte, 1, &success_sent) == EZN_ERROR) {
+												error_code = 500;
+												break;
+											}
+										}
+										break;
+									}
+								}
 								if (get_unprecise_epoch() - rectime_start > TIMEOUT) {
 									error_code = 505;
 									break;
 								}
 							}
+							if (error_code != 0) {
+								sprintf(redir_msg, "ERROR %d\n", error_code);
+								ezn_send(connection, (EZN_BYTE*)redir_msg, strlen(redir_msg), &success_sent);
+							}
 						}
 						ezn_disconnect_client(&proxy_client);
 					}
-					printf("%s", redir_msg);
 				}
-				EZN_INFO("error code: %d", error_code);
-				EZN_INFO("address ip: %d.%d.%d.%d", url_ip[0], url_ip[1], url_ip[2], url_ip[3]);	
-				EZN_INFO("url info: %s : %d / %s", hostname, (int)url_port, path);	
 			} else {
 				error_code = 501;
 			}
 		}
 	}
-
-	EZN_INFO("proxy go: %s - %s - %s", PROXY_METHOD, PROXY_URL, PROXY_VERSION);	
-
+	EZN_CLOSE(connection);
 	free(connectionptr);
 	#undef PROXY_METHOD 
 	#undef PROXY_URL 
 	#undef PROXY_VERSION
+	#undef REMAINING_HEADERS
 }
 
 EZN_STATUS attach_client(ezn_Server* server, EZN_SOCKET clientsock) {
