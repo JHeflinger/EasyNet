@@ -35,7 +35,11 @@ EZN_STATUS ezn_ask(EZN_SOCKET clientsocket, EZN_BYTE* buffer, size_t bufflength,
 
 EZN_STATUS ezn_send(EZN_SOCKET clientsocket, EZN_BYTE* buffer, size_t bufflength, size_t* sentlength) {
 	EZN_SAFECHECK();
-    *sentlength = send(clientsocket, (char*)buffer, bufflength, 0);
+	#ifdef __linux__
+    *sentlength = send(clientsocket, (char*)buffer, bufflength, MSG_NOSIGNAL);
+	#else 
+	*sendlength = send(clientsocket, (char*)buffer, bufflength, 0);
+	#endif
     if (*sentlength < 0) {
         EZN_WARN("An error occured while sending data");
         return EZN_ERROR;
